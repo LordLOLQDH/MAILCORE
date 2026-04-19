@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Malifix</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+
+<body>
+  <header>
+    <h1>Malifix</h1>
+  </header>
+
+  <main class="card">
+    <h2>Angebot erstellen</h2>
+
+    <textarea id="input" placeholder="z.B. 30 qm Wände streichen, 20 qm Decke streichen"></textarea>
+
+    <button onclick="parseOffer()">Berechnen</button>
+
+    <div id="output"></div>
+
+    <button id="pdfBtn" onclick="downloadPDF()" style="display:none;">
+      PDF erstellen
+    </button>
+  </main>
+
+  <script src="app.js"></script>
+  <script src="pdf.js"></script>
+</body>
+</html>
