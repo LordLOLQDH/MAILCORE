@@ -9,9 +9,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="./style.css?v=0.9.0">
+<link rel="stylesheet" href="./style.css?v=1.0.0">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script defer src="./app.js?v=0.9.0"></script>
+<script defer src="./app.js?v=1.0.0"></script>
 </head>
 <body>
 <div id="authView" class="auth-screen">
@@ -30,7 +30,7 @@
     </form>
     <div class="auth-message" id="authMessage" role="status" aria-live="polite"></div>
     <button class="text-btn" id="authModeBtn" type="button">Noch kein Konto? Konto erstellen</button>
-    <div class="auth-foot">Sicherer Login über Supabase · MAILCORE 0.9.0</div>
+    <div class="auth-foot">Sicherer Login über Supabase · MAILCORE 1.0.0</div>
   </section>
 </div>
 <div id="chatView" class="chat-app hidden">
@@ -51,7 +51,7 @@
     <header class="topbar">
       <button id="mobileMenu" class="mobile-menu" type="button" aria-label="Menü">☰</button>
       <div class="conversation-person" id="conversationPerson"><div class="avatar placeholder-avatar">M</div><div><strong>Dein Chatbereich</strong><small>Wähle eine Unterhaltung</small></div></div>
-      <div class="top-actions"><button class="feature-btn" id="contactsBtn" type="button">Kontakte</button><button class="feature-btn" id="hiddenChatsBtn" type="button">Versteckte Chats</button><button class="feature-btn" id="inviteBtn" type="button">＋ Einladen</button><button class="feature-btn ai-feature-btn" id="aiBtn" type="button">◇ MAILCORE AI</button><span class="credit-pill" id="creditPill">0 Credits</span><button class="feature-btn chat-action" id="addContactBtn" type="button">Kontakt +</button><button class="feature-btn chat-action" id="muteChatBtn" type="button">Stummschalten</button><button class="feature-btn chat-action" id="hideChatBtn" type="button">Chat verstecken</button><button class="feature-btn chat-action" id="lockChatBtn" type="button">Sperren</button><button class="feature-btn chat-action" id="blockUserBtn" type="button">Blockieren</button><span class="secure-label"><i></i> VERBUNDEN</span><button class="small-icon" id="refreshBtn" type="button" title="Aktualisieren">↻</button></div>
+      <div class="top-actions"><button class="feature-btn hidden" id="adminBtn" type="button">Admin</button><button class="feature-btn" id="contactsBtn" type="button">Kontakte</button><button class="feature-btn" id="hiddenChatsBtn" type="button">Versteckte Chats</button><button class="feature-btn" id="inviteBtn" type="button">＋ Einladen</button><button class="feature-btn ai-feature-btn" id="aiBtn" type="button">◇ MAILCORE AI</button><span class="credit-pill" id="creditPill">0 Credits</span><button class="feature-btn chat-action" id="addContactBtn" type="button">Kontakt +</button><button class="feature-btn chat-action" id="muteChatBtn" type="button">Stummschalten</button><button class="feature-btn chat-action" id="hideChatBtn" type="button">Chat verstecken</button><button class="feature-btn chat-action" id="lockChatBtn" type="button">Sperren</button><button class="feature-btn chat-action" id="blockUserBtn" type="button">Blockieren</button><span class="secure-label"><i></i> VERBUNDEN</span><button class="small-icon" id="refreshBtn" type="button" title="Aktualisieren">↻</button></div>
     </header>
     <section class="welcome-panel" id="welcomePanel">
       <div class="welcome-illustration"><div class="bubble bubble-one">Hallo!</div><div class="bubble bubble-two">Bis gleich.</div><div class="welcome-mark">M</div></div>
@@ -105,6 +105,7 @@
     <div class="auth-message" id="deleteAccountMessage" role="status" aria-live="polite"></div>
   </section>
 </div>
+<div class="modal-backdrop hidden" id="adminModal"><section class="user-modal admin-modal" role="dialog" aria-modal="true"><header><div><span class="modal-icon">⌘</span><strong>MAILCORE Admin Center</strong></div><button class="small-icon" id="adminClose" type="button">×</button></header><div class="settings-section-title">Systemnachricht an alle</div><textarea id="adminBroadcastText" maxlength="2000" rows="3" placeholder="Nachricht an alle MAILCORE-Konten …"></textarea><button class="primary-btn" id="adminBroadcastSend" type="button">An alle veröffentlichen</button><div class="settings-section-title">Systemkontrolle</div><p>Der rote Not-Aus löscht keine Daten. Er aktiviert einen globalen Wartungsmodus. Das ist absichtlich kein versehentlicher digitaler Flammenwerfer.</p><input id="adminLockdownMessage" maxlength="300" placeholder="Wartungshinweis für Nutzer"><button class="danger-btn" id="adminLockdownBtn" data-active="false" type="button">Not-Aus aktivieren</button><div class="settings-section-title">Alle Konten</div><button class="secondary-btn" id="adminRefresh" type="button">Konten aktualisieren</button><div id="adminUsers" class="admin-users">Konten werden geladen …</div></section></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 </body>
 </html>
