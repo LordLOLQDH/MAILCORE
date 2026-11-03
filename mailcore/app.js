@@ -94,7 +94,7 @@ async function enterApp(session){
   if(state.booting||state.user?.id===session.user.id)return;
   state.booting=true;state.user=session.user;
   try{$("authView").classList.add("hidden");$("chatView").classList.remove("hidden");await ensureProfile();const {data:blockedRows}=await state.db.from("mailcore_blocks").select("blocked_id").eq("owner_id",state.user.id);state.blockedUsers=(blockedRows||[]).map(x=>x.blocked_id);await loadAppearance();if(!state.inviteClaimed){state.inviteClaimed=true;const code=new URLSearchParams(location.search).get("invite");if(code){try{const claim=await mailcoreApi("claim_invite",{code});if(claim.claimed)toast("Einladung eingelöst. 10 Bonus-Credits erhalten.");history.replaceState({},document.title,location.pathname);}catch(e){console.warn("Einladung:",e.message);}}}try{const wallet=await mailcoreApi("wallet");updateCredits(wallet.credits);}catch(e){console.warn("Credits:",e.message);toast("Guthaben konnte nicht geladen werden: "+e.message);}
-  try{const role=await mailcoreApi("admin_check");state.isAdmin=!!role.is_admin;$("adminBtn").classList.toggle("hidden",!state.isAdmin);$("adminContactBtn").classList.toggle("hidden",state.isAdmin);}catch{state.isAdmin=false;$("adminBtn").classList.add("hidden");$("adminContactBtn").classList.remove("hidden");}
+  try{const role=await mailcoreApi("admin_check");state.isAdmin=!!role.is_admin;$("adminBtn").classList.toggle("hidden",!state.isAdmin);$("adminSideBtn").classList.toggle("hidden",!state.isAdmin);$("adminContactBtn").classList.toggle("hidden",state.isAdmin);}catch{state.isAdmin=false;$("adminBtn").classList.add("hidden");$("adminSideBtn").classList.add("hidden");$("adminContactBtn").classList.remove("hidden");}
   try{const system=await mailcoreApi("system_status");if(system.lockdown&&!state.isAdmin){await state.db.auth.signOut({scope:"local"});showLogin();authMessage(system.lockdown_message||"MAILCORE ist vorübergehend im Wartungsmodus.",true);return;}}catch(e){console.warn("Systemstatus:",e.message);}
   try{await mailcoreApi("onboard");}catch(e){console.warn("MAILCORE Onboarding:",e.message);}
   await loadChats();
@@ -355,6 +355,7 @@ async function init(){
   $("blockUserBtn").addEventListener("click",toggleBlockUser);
   $("contactsBtn").addEventListener("click",openContacts);
   $("adminBtn").addEventListener("click",openAdmin);
+  $("adminSideBtn").addEventListener("click",openAdmin);
   $("adminClose").addEventListener("click",()=>$("adminModal").classList.add("hidden"));
   $("adminRefresh").addEventListener("click",refreshAdminUsers);
   $("creditGrantBtn").addEventListener("click",async()=>{const user_id=$("creditTarget").value,amount=Number($("creditAmount").value),reason=$("creditReason").value.trim()||"Admin-Gutschrift";if(!user_id||!Number.isInteger(amount)||amount<1||amount>100000){toast("Bitte Nutzer und gültigen Credit-Betrag auswählen.");return;}const btn=$("creditGrantBtn");btn.disabled=true;try{const result=await mailcoreApi("admin_credit",{user_id,amount,reason});$("creditAdminStatus").textContent="Gutschrift erfolgreich. Neuer Kontostand: "+result.credits+" Credits.";await refreshAdminUsers();}catch(e){$("creditAdminStatus").textContent="Fehler: "+e.message;}finally{btn.disabled=false;}});
