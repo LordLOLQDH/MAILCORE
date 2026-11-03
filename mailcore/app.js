@@ -1,36 +1,113 @@
+(() => {
+"use strict";
 const SUPABASE_URL = "https://eopvkwhcgznvubesaszv.supabase.co";
 const SUPABASE_KEY = "sb_publishable_d3hVgDqwTuB63BtfumPwoQ_ngy2ig_c";
-const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const $ = id => document.getElementById(id);
-let user = null, profile = null, activeChatId = null, activePartner = null, messageChannel = null, chats = [], authMode = "login", searchTimer = null;
+const state = { db:null, user:null, profile:null, chats:[], activeChatId:null, activePartner:null, channel:null, searchTimer:null, heartbeatTimer:null, toastTimer:null, booting:false };
 const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const initials = name => (name || "?").trim().slice(0,1).toUpperCase();
-function toast(message){$("toast").textContent=message;$("toast").classList.add("show");clearTimeout(toast.timer);toast.timer=setTimeout(()=>$("toast").classList.remove("show"),2600)}
-function authMessage(message,error=false){$("authMessage").textContent=message;$("authMessage").classList.toggle("error",error)}
-function setAuthMode(mode){authMode=mode;const signup=mode==="signup";$("authTitle").innerHTML=signup?'Erstelle dein Konto<span>.</span>':'Willkommen zurück<span>.</span>';$("authCopy").textContent=signup?'Ein Konto, deine Chats und alles an einem Ort.':'Melde dich an und setze deine Unterhaltungen fort.';$("displayNameWrap").classList.toggle("hidden",!signup);$("displayName").required=signup;$("authPassword").autocomplete=signup?"new-password":"current-password";$("authSubmit").innerHTML=signup?'Konto erstellen <span>→</span>':'Anmelden <span>→</span>';$("authModeBtn").textContent=signup?'Du hast bereits ein Konto? Anmelden':'Noch kein Konto? Konto erstellen';authMessage("")}
-$("authModeBtn").addEventListener("click",()=>setAuthMode(authMode==="login"?"signup":"login"));
-$("authForm").addEventListener("submit",async e=>{e.preventDefault();const email=$("authEmail").value.trim(),password=$("authPassword").value;const button=$("authSubmit");button.disabled=true;button.textContent="Einen Moment …";authMessage("");try{if(authMode==="signup"){const display_name=$("displayName").value.trim()||email.split("@")[0];const {data,error}=await db.auth.signUp({email,password,options:{data:{display_name},emailRedirectTo:window.location.origin+window.location.pathname}});if(error)throw error;if(!data.session){authMessage("Konto erstellt. Bitte bestätige deine E-Mail-Adresse über den Link in deinem Postfach.");}else{authMessage("Konto erstellt. MAILCORE wird geöffnet …");}}else{const {error}=await db.auth.signInWithPassword({email,password});if(error)throw error;}}catch(error){authMessage(error.message||"Anmeldung fehlgeschlagen.",true)}finally{button.disabled=false;button.innerHTML=authMode==="signup"?'Konto erstellen <span>→</span>':'Anmelden <span>→</span>'}});
-async function showApp(session){user=session.user;$("authView").classList.add("hidden");$("chatView").classList.remove("hidden");await ensureProfile();await loadChats();heartbeat();setInterval(heartbeat,60000)}
-async function ensureProfile(){let {data,error}=await db.from("mailcore_profiles").select("*").eq("id",user.id).maybeSingle();if(error)throw error;if(!data){const fallback=(user.email||"user").split("@")[0].replace(/[^a-z0-9_]/gi,"").slice(0,15)||"user";const {data:created,error:createError}=await db.from("mailcore_profiles").insert({id:user.id,username:fallback+"_"+user.id.slice(0,6),display_name:user.user_metadata?.display_name||fallback}).select().single();if(createError)throw createError;data=created;}profile=data;$("profileName").textContent=profile.display_name;$("profileHandle").textContent="@"+profile.username;$("profileAvatar").textContent=initials(profile.display_name)}
-async function heartbeat(){if(!user)return;await db.from("mailcore_profiles").update({last_seen_at:new Date().toISOString()}).eq("id",user.id)}
-async function loadChats(){const {data:mine,error}=await db.from("mailcore_participants").select("conversation_id").eq("user_id",user.id);if(error)throw error;const ids=[...new Set((mine||[]).map(x=>x.conversation_id))];if(!ids.length){chats=[];renderChats();return;}const {data:members,error:memberError}=await db.from("mailcore_participants").select("conversation_id,user_id,mailcore_profiles(username,display_name,last_seen_at)").in("conversation_id",ids);if(memberError)throw memberError;const {data:allMessages,error:msgError}=await db.from("mailcore_messages").select("id,conversation_id,sender_id,body,created_at,read_at").in("conversation_id",ids).order("created_at",{ascending:false});if(msgError)throw msgError;chats=ids.map(id=>{const partnerRow=(members||[]).find(x=>x.conversation_id===id&&x.user_id!==user.id);const partner=partnerRow?.mailcore_profiles||{username:"unbekannt",display_name:"MAILCORE Nutzer"};const latest=(allMessages||[]).find(m=>m.conversation_id===id);const unread=(allMessages||[]).filter(m=>m.conversation_id===id&&m.sender_id!==user.id&&!m.read_at).length;return{id,partner,latest,unread}}).sort((a,b)=>new Date(b.latest?.created_at||0)-new Date(a.latest?.created_at||0));renderChats();if(activeChatId&&!chats.some(c=>c.id===activeChatId)){activeChatId=null;showWelcome();}}
-function shortTime(value){if(!value)return"";const d=new Date(value),today=new Date();return d.toDateString()===today.toDateString()?d.toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"}):d.toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit"})}
-function renderChats(){const q=$("chatSearch").value.trim().toLowerCase();const list=chats.filter(c=>(c.partner.display_name+" "+c.partner.username).toLowerCase().includes(q));$("chatList").innerHTML=list.length?list.map(c=>'<div class="chat-item '+(c.id===activeChatId?"active":"")+'" data-chat="'+c.id+'"><div class="avatar">'+esc(initials(c.partner.display_name))+'</div><div class="chat-item-copy"><div class="chat-item-top"><strong>'+esc(c.partner.display_name)+'</strong><time>'+shortTime(c.latest?.created_at)+'</time></div><p>'+(c.latest?esc(c.latest.sender_id===user.id?"Du: ":"")+esc(c.latest.body):"Noch keine Nachrichten")+'</p></div>'+(c.unread?'<span class="unread-count">'+c.unread+'</span>':"")+'</div>').join(""):'<div class="empty-chats">Noch keine Chats.<br>Starte eine Unterhaltung über das Plus.</div>'}
-function showWelcome(){$("welcomePanel").classList.remove("hidden");$("conversation").classList.add("hidden");$("conversationPerson").innerHTML='<div class="avatar placeholder-avatar">M</div><div><strong>Dein Chatbereich</strong><small>Wähle eine Unterhaltung</small></div>'}
-async function openChat(id,partner){activeChatId=id;activePartner=partner||chats.find(c=>c.id===id)?.partner;renderChats();$("sidebar").classList.remove("open");$("welcomePanel").classList.add("hidden");$("conversation").classList.remove("hidden");$("conversationPerson").innerHTML='<div class="avatar">'+esc(initials(activePartner?.display_name))+'</div><div><strong>'+esc(activePartner?.display_name||"MAILCORE Nutzer")+'</strong><small>@'+esc(activePartner?.username||"nutzer")+'</small></div>';await loadMessages();if(messageChannel)await db.removeChannel(messageChannel);messageChannel=db.channel("mailcore-chat-"+id).on("postgres_changes",{event:"INSERT",schema:"public",table:"mailcore_messages",filter:"conversation_id=eq."+id},payload=>{appendMessage(payload.new);loadChats();markRead(id)}).subscribe();await markRead(id)}
-function renderMessage(m){const mine=m.sender_id===user.id;return'<article class="message '+(mine?"mine":"")+'" data-message="'+m.id+'"><div class="message-bubble">'+esc(m.body)+'</div><div class="message-meta"><time>'+new Date(m.created_at).toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"})+'</time>'+(mine?" · Gesendet":"")+'</div></article>'}
-async function loadMessages(){const {data,error}=await db.from("mailcore_messages").select("*").eq("conversation_id",activeChatId).order("created_at",{ascending:true}).limit(300);if(error){toast(error.message);return;}$("messages").innerHTML=(data||[]).map(renderMessage).join("");$("messages").scrollTop=$("messages").scrollHeight}
-function appendMessage(m){if(m.conversation_id!==activeChatId)return;if($("messages").querySelector('[data-message="'+m.id+'"]'))return;$("messages").insertAdjacentHTML("beforeend",renderMessage(m));$("messages").scrollTop=$("messages").scrollHeight}
-async function markRead(id){await db.from("mailcore_messages").update({read_at:new Date().toISOString()}).eq("conversation_id",id).neq("sender_id",user.id).is("read_at",null);const chat=chats.find(c=>c.id===id);if(chat)chat.unread=0;renderChats()}
-$("chatList").addEventListener("click",e=>{const item=e.target.closest("[data-chat]");if(item){const chat=chats.find(c=>c.id===item.dataset.chat);if(chat)openChat(chat.id,chat.partner)}});
-$("chatSearch").addEventListener("input",renderChats);
-$("messageForm").addEventListener("submit",async e=>{e.preventDefault();const body=$("messageInput").value.trim();if(!body||!activeChatId)return;const button=$("messageForm").querySelector("button");button.disabled=true;const {data,error}=await db.from("mailcore_messages").insert({conversation_id:activeChatId,sender_id:user.id,body}).select().single();button.disabled=false;if(error){toast(error.message);return;}$("messageInput").value="";if(data)appendMessage(data);await loadChats();$("messageInput").focus()});
-$("messageInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();$("messageForm").requestSubmit()}});
-function openUserModal(){$("userModal").classList.remove("hidden");$("userSearch").value="";$("userResults").innerHTML='<div class="result-placeholder">Gib mindestens 2 Zeichen ein.</div>';$("userSearch").focus()}
-$("newChatBtn").addEventListener("click",openUserModal);$("welcomeNewChat").addEventListener("click",openUserModal);$("closeUserModal").addEventListener("click",()=>$("userModal").classList.add("hidden"));$("userModal").addEventListener("click",e=>{if(e.target===$("userModal"))$("userModal").classList.add("hidden")});
-$("userSearch").addEventListener("input",()=>{clearTimeout(searchTimer);searchTimer=setTimeout(searchUsers,250)});
-async function searchUsers(){const q=$("userSearch").value.trim().replace(/^@/,"");if(q.length<2){$("userResults").innerHTML='<div class="result-placeholder">Gib mindestens 2 Zeichen ein.</div>';return;}const {data,error}=await db.from("mailcore_profiles").select("id,username,display_name,last_seen_at").ilike("username","%"+q+"%").neq("id",user.id).limit(12);if(error){$("userResults").innerHTML='<div class="result-placeholder">Suche fehlgeschlagen.</div>';return;}if(!data.length){$("userResults").innerHTML='<div class="result-placeholder">Kein Nutzer gefunden.</div>';return;}$("userResults").innerHTML=data.map(p=>'<div class="user-result" data-user="'+p.id+'"><div class="avatar">'+esc(initials(p.display_name))+'</div><div class="user-result-copy"><strong>'+esc(p.display_name)+'</strong><small>@'+esc(p.username)+'</small></div><span class="result-arrow">→</span></div>').join("")}
-$("userResults").addEventListener("click",async e=>{const row=e.target.closest("[data-user]");if(!row)return;const target=row.dataset.user;const partnerName=row.querySelector("strong").textContent,partnerHandle=row.querySelector("small").textContent.slice(1);$("userModal").classList.add("hidden");const {data,error}=await db.rpc("mailcore_create_direct_chat",{p_target_user_id:target});if(error){toast(error.message);return;}await loadChats();await openChat(data,{display_name:partnerName,username:partnerHandle});});
-$("mobileMenu").addEventListener("click",()=>$("sidebar").classList.toggle("open"));$("refreshBtn").addEventListener("click",async()=>{await loadChats();if(activeChatId)await loadMessages();toast("Chats aktualisiert")});
-$("logoutBtn").addEventListener("click",async()=>{if(messageChannel)await db.removeChannel(messageChannel);await db.auth.signOut();user=null;profile=null;activeChatId=null;$("chatView").classList.add("hidden");$("authView").classList.remove("hidden");setAuthMode("login")});
-$("chatView").classList.add("hidden");db.auth.getSession().then(({data,error})=>{if(error){authMessage(error.message,true);return;}if(data.session)showApp(data.session)});db.auth.onAuthStateChange((event,session)=>{if(event==="SIGNED_IN"&&session&&!user)showApp(session);if(event==="SIGNED_OUT"){user=null;$("chatView").classList.add("hidden");$("authView").classList.remove("hidden")}});
+const initials = name => (String(name || "?").trim().charAt(0) || "?").toUpperCase();
+function toast(message){ $("toast").textContent=message; $("toast").classList.add("show"); clearTimeout(state.toastTimer); state.toastTimer=setTimeout(()=>$("toast").classList.remove("show"),3200); }
+function authMessage(message,error=false){ $("authMessage").textContent=message; $("authMessage").classList.toggle("error",error); }
+function setAuthMode(mode){ const signup=mode==="signup"; $("authForm").dataset.mode=mode; $("authTitle").innerHTML=signup?'Konto erstellen<span>.</span>':'Willkommen zurück<span>.</span>'; $("authCopy").textContent=signup?'Erstelle deinen Zugang und starte deine ersten Unterhaltungen.':'Melde dich an und setze deine Unterhaltungen fort.'; $("displayNameWrap").classList.toggle("hidden",!signup); $("displayName").required=signup; $("authPassword").autocomplete=signup?"new-password":"current-password"; $("authSubmit").innerHTML=signup?'Konto erstellen <span>→</span>':'Anmelden <span>→</span>'; $("authModeBtn").textContent=signup?'Du hast bereits ein Konto? Anmelden':'Noch kein Konto? Konto erstellen'; authMessage(""); }
+function showLogin(){ $("chatView").classList.add("hidden"); $("authView").classList.remove("hidden"); state.user=null; state.profile=null; state.activeChatId=null; state.activePartner=null; state.chats=[]; if(state.channel){state.db.removeChannel(state.channel);state.channel=null;} clearInterval(state.heartbeatTimer); }
+function showWelcome(){ $("welcomePanel").classList.remove("hidden"); $("conversation").classList.add("hidden"); $("conversationPerson").innerHTML='<div class="avatar placeholder-avatar">M</div><div><strong>Dein Chatbereich</strong><small>Wähle eine Unterhaltung</small></div>'; }
+async function ensureProfile(){
+  let {data,error}=await state.db.from("mailcore_profiles").select("*").eq("id",state.user.id).maybeSingle();
+  if(error) throw error;
+  if(!data){
+    const base=(state.user.email||"nutzer").split("@")[0].toLowerCase().replace(/[^a-z0-9_]/g,"").slice(0,14)||"nutzer";
+    const username=base+"_"+state.user.id.slice(0,6);
+    const result=await state.db.from("mailcore_profiles").upsert({id:state.user.id,username,display_name:state.user.user_metadata?.display_name||base},{onConflict:"id"}).select().single();
+    if(result.error) throw result.error; data=result.data;
+  }
+  state.profile=data; $("profileName").textContent=data.display_name||data.username; $("profileHandle").textContent="@"+data.username; $("profileAvatar").textContent=initials(data.display_name||data.username);
+}
+async function heartbeat(){ if(!state.user)return; const {error}=await state.db.from("mailcore_profiles").update({last_seen_at:new Date().toISOString()}).eq("id",state.user.id); if(error) console.warn("MAILCORE heartbeat:",error.message); }
+async function loadChats(){
+  const {data:mine,error}=await state.db.from("mailcore_participants").select("conversation_id").eq("user_id",state.user.id);
+  if(error) throw error;
+  const ids=[...new Set((mine||[]).map(x=>x.conversation_id))];
+  if(!ids.length){state.chats=[];renderChats();return;}
+  const [membersResult,messagesResult]=await Promise.all([
+    state.db.from("mailcore_participants").select("conversation_id,user_id,mailcore_profiles(username,display_name,last_seen_at)").in("conversation_id",ids),
+    state.db.from("mailcore_messages").select("id,conversation_id,sender_id,body,created_at,read_at").in("conversation_id",ids).order("created_at",{ascending:false})
+  ]);
+  if(membersResult.error) throw membersResult.error; if(messagesResult.error) throw messagesResult.error;
+  const messages=messagesResult.data||[];
+  state.chats=ids.map(id=>{
+    const member=(membersResult.data||[]).find(x=>x.conversation_id===id&&x.user_id!==state.user.id);
+    const partner=member?.mailcore_profiles||{username:"unbekannt",display_name:"MAILCORE Nutzer"};
+    return {id,partner,latest:messages.find(m=>m.conversation_id===id)||null,unread:messages.filter(m=>m.conversation_id===id&&m.sender_id!==state.user.id&&!m.read_at).length};
+  }).sort((a,b)=>new Date(b.latest?.created_at||0)-new Date(a.latest?.created_at||0));
+  renderChats();
+}
+function shortTime(value){if(!value)return"";const d=new Date(value);return d.toDateString()===new Date().toDateString()?d.toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"}):d.toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit"});}
+function renderChats(){
+  const query=$("chatSearch").value.trim().toLowerCase();
+  const visible=state.chats.filter(c=>(c.partner.display_name+" "+c.partner.username).toLowerCase().includes(query));
+  $("chatList").innerHTML=visible.length?visible.map(c=>'<button type="button" class="chat-item '+(c.id===state.activeChatId?"active":"")+'" data-chat="'+esc(c.id)+'"><span class="avatar">'+esc(initials(c.partner.display_name))+'</span><span class="chat-item-copy"><span class="chat-item-top"><strong>'+esc(c.partner.display_name)+'</strong><time>'+shortTime(c.latest?.created_at)+'</time></span><span class="chat-preview">'+(c.latest?esc((c.latest.sender_id===state.user.id?"Du: ":"")+c.latest.body):"Noch keine Nachrichten")+'</span></span>'+(c.unread?'<span class="unread-count">'+c.unread+'</span>':"")+'</button>').join(""):'<div class="empty-chats">Noch keine Chats.<br>Starte eine Unterhaltung über das Plus.</div>';
+}
+function renderMessage(m){const mine=m.sender_id===state.user.id;return '<article class="message '+(mine?"mine":"")+'" data-message="'+esc(m.id)+'"><div class="message-bubble">'+esc(m.body)+'</div><div class="message-meta"><time>'+new Date(m.created_at).toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"})+'</time>'+(mine?" · Gesendet":"")+'</div></article>';}
+function appendMessage(m){if(m.conversation_id!==state.activeChatId||$("messages").querySelector('[data-message="'+CSS.escape(String(m.id))+'"]'))return;$("messages").insertAdjacentHTML("beforeend",renderMessage(m));$("messages").scrollTop=$("messages").scrollHeight;}
+async function loadMessages(){const {data,error}=await state.db.from("mailcore_messages").select("*").eq("conversation_id",state.activeChatId).order("created_at",{ascending:true}).limit(300);if(error)throw error;$("messages").innerHTML=(data||[]).map(renderMessage).join("");$("messages").scrollTop=$("messages").scrollHeight;}
+async function markRead(id){const {error}=await state.db.from("mailcore_messages").update({read_at:new Date().toISOString()}).eq("conversation_id",id).neq("sender_id",state.user.id).is("read_at",null);if(error)console.warn("Lesestatus:",error.message);const c=state.chats.find(x=>x.id===id);if(c)c.unread=0;renderChats();}
+async function openChat(id,partner){
+  state.activeChatId=id;state.activePartner=partner||state.chats.find(c=>c.id===id)?.partner||{display_name:"MAILCORE Nutzer",username:"nutzer"};
+  renderChats();$("sidebar").classList.remove("open");$("welcomePanel").classList.add("hidden");$("conversation").classList.remove("hidden");
+  $("conversationPerson").innerHTML='<div class="avatar">'+esc(initials(state.activePartner.display_name))+'</div><div><strong>'+esc(state.activePartner.display_name)+'</strong><small>@'+esc(state.activePartner.username||"nutzer")+'</small></div>';
+  if(state.channel){await state.db.removeChannel(state.channel);state.channel=null;}
+  await loadMessages(); await markRead(id);
+  state.channel=state.db.channel("mailcore-chat-"+id).on("postgres_changes",{event:"INSERT",schema:"public",table:"mailcore_messages",filter:"conversation_id=eq."+id},async payload=>{appendMessage(payload.new);await loadChats();if(payload.new.sender_id!==state.user.id)await markRead(id);}).subscribe(status=>{if(status==="CHANNEL_ERROR")toast("Live-Verbindung unterbrochen. Aktualisiere den Chat.");});
+}
+async function enterApp(session){
+  if(state.booting||state.user?.id===session.user.id)return;
+  state.booting=true;state.user=session.user;
+  try{$("authView").classList.add("hidden");$("chatView").classList.remove("hidden");await ensureProfile();await loadChats();await heartbeat();clearInterval(state.heartbeatTimer);state.heartbeatTimer=setInterval(heartbeat,60000);}
+  catch(error){console.error(error);toast("MAILCORE konnte nicht geladen werden: "+(error.message||"Unbekannter Fehler"));showLogin();authMessage("Backend-Fehler: "+(error.message||"Bitte später erneut versuchen."),true);}
+  finally{state.booting=false;}
+}
+function openUserModal(){$("userModal").classList.remove("hidden");$("userSearch").value="";$("userResults").innerHTML='<div class="result-placeholder">Gib mindestens 2 Zeichen ein.</div>';$("userSearch").focus();}
+async function searchUsers(){
+  const q=$("userSearch").value.trim().replace(/^@/,"");if(q.length<2){$("userResults").innerHTML='<div class="result-placeholder">Gib mindestens 2 Zeichen ein.</div>';return;}
+  $("userResults").innerHTML='<div class="result-placeholder">Suche läuft …</div>';
+  const {data,error}=await state.db.from("mailcore_profiles").select("id,username,display_name,last_seen_at").ilike("username","%"+q+"%").neq("id",state.user.id).limit(12);
+  if(error){$("userResults").innerHTML='<div class="result-placeholder">Fehler: '+esc(error.message)+'</div>';return;}
+  if(!data?.length){$("userResults").innerHTML='<div class="result-placeholder">Kein Nutzer gefunden.</div>';return;}
+  $("userResults").innerHTML=data.map(p=>'<button type="button" class="user-result" data-user="'+esc(p.id)+'" data-username="'+esc(p.username)+'" data-display="'+esc(p.display_name)+'"><span class="avatar">'+esc(initials(p.display_name))+'</span><span class="user-result-copy"><strong>'+esc(p.display_name)+'</strong><small>@'+esc(p.username)+'</small></span><span class="result-arrow">→</span></button>').join("");
+}
+async function startDirectChat(row){
+  const target=row.dataset.user,partner={display_name:row.dataset.display||"MAILCORE Nutzer",username:row.dataset.username||"nutzer"};
+  $("userModal").classList.add("hidden");row.disabled=true;
+  try{const {data,error}=await state.db.rpc("mailcore_create_direct_chat",{p_target_user_id:target});if(error)throw error;const id=typeof data==="string"?data:data?.id||data?.conversation_id;if(!id)throw new Error("Die Chat-ID wurde vom Server nicht zurückgegeben.");await loadChats();await openChat(id,partner);}
+  catch(error){toast("Chat konnte nicht gestartet werden: "+error.message);row.disabled=false;}
+}
+async function init(){
+  if(!window.supabase?.createClient){authMessage("Die Verbindungskomponente konnte nicht geladen werden. Bitte Seite neu laden.",true);return;}
+  state.db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+  $("authModeBtn").addEventListener("click",()=>setAuthMode($("authForm").dataset.mode==="signup"?"login":"signup"));
+  $("authForm").addEventListener("submit",async e=>{
+    e.preventDefault();const signup=$("authForm").dataset.mode==="signup",button=$("authSubmit"),email=$("authEmail").value.trim(),password=$("authPassword").value;
+    button.disabled=true;button.textContent="Einen Moment …";authMessage("");
+    try{
+      if(signup){const display_name=$("displayName").value.trim()||email.split("@")[0];const {data,error}=await state.db.auth.signUp({email,password,options:{data:{display_name},emailRedirectTo:location.origin+location.pathname}});if(error)throw error;if(data.session)await enterApp(data.session);else authMessage("Konto erstellt. Bitte bestätige deine E-Mail-Adresse über den Link in deinem Postfach.");}
+      else{const {data,error}=await state.db.auth.signInWithPassword({email,password});if(error)throw error;if(data.session)await enterApp(data.session);}
+    }catch(error){authMessage(error.message||"Anmeldung fehlgeschlagen.",true);}
+    finally{button.disabled=false;button.innerHTML=signup?'Konto erstellen <span>→</span>':'Anmelden <span>→</span>';}
+  });
+  $("chatList").addEventListener("click",e=>{const item=e.target.closest("[data-chat]");if(item){const c=state.chats.find(x=>x.id===item.dataset.chat);if(c)openChat(c.id,c.partner).catch(err=>toast(err.message));}});
+  $("chatSearch").addEventListener("input",renderChats);
+  $("messageForm").addEventListener("submit",async e=>{e.preventDefault();const body=$("messageInput").value.trim();if(!body||!state.activeChatId)return;const button=$("messageForm").querySelector("button");button.disabled=true;try{const {data,error}=await state.db.from("mailcore_messages").insert({conversation_id:state.activeChatId,sender_id:state.user.id,body}).select().single();if(error)throw error;$("messageInput").value="";if(data)appendMessage(data);await loadChats();$("messageInput").focus();}catch(error){toast("Nachricht nicht gesendet: "+error.message);}finally{button.disabled=false;}});
+  $("messageInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();$("messageForm").requestSubmit();}});
+  $("newChatBtn").addEventListener("click",openUserModal);$("welcomeNewChat").addEventListener("click",openUserModal);
+  $("closeUserModal").addEventListener("click",()=>$("userModal").classList.add("hidden"));
+  $("userModal").addEventListener("click",e=>{if(e.target===$("userModal"))$("userModal").classList.add("hidden");});
+  $("userSearch").addEventListener("input",()=>{clearTimeout(state.searchTimer);state.searchTimer=setTimeout(()=>searchUsers().catch(err=>toast(err.message)),300);});
+  $("userResults").addEventListener("click",e=>{const row=e.target.closest("[data-user]");if(row)startDirectChat(row);});
+  $("mobileMenu").addEventListener("click",()=>$("sidebar").classList.toggle("open"));
+  $("refreshBtn").addEventListener("click",async()=>{const button=$("refreshBtn");button.disabled=true;try{await loadChats();if(state.activeChatId)await loadMessages();toast("Chats aktualisiert");}catch(error){toast("Aktualisierung fehlgeschlagen: "+error.message);}finally{button.disabled=false;}});
+  $("logoutBtn").addEventListener("click",async()=>{try{await state.db.auth.signOut();showLogin();setAuthMode("login");}catch(error){toast(error.message);}});
+  state.db.auth.onAuthStateChange((event,session)=>{if(event==="SIGNED_IN"&&session)enterApp(session);if(event==="SIGNED_OUT")showLogin();});
+  const {data,error}=await state.db.auth.getSession();if(error)throw error;if(data.session)await enterApp(data.session);
+}
+document.addEventListener("DOMContentLoaded",()=>init().catch(error=>{console.error("MAILCORE init:",error);authMessage("MAILCORE-Start fehlgeschlagen: "+(error.message||"Bitte Seite neu laden."),true);}));
+})();
