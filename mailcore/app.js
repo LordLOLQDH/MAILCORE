@@ -84,6 +84,30 @@ async function startDirectChat(row){
   try{const {data,error}=await state.db.rpc("mailcore_create_direct_chat",{p_target_user_id:target});if(error)throw error;const id=typeof data==="string"?data:data?.id||data?.conversation_id;if(!id)throw new Error("Die Chat-ID wurde vom Server nicht zurückgegeben.");await loadChats();await openChat(id,partner);}
   catch(error){toast("Chat konnte nicht gestartet werden: "+error.message);row.disabled=false;}
 }
+function openDeleteAccount(){ $("deleteAccountConfirm").value=""; $("confirmDeleteAccount").disabled=true; $("deleteAccountMessage").textContent=""; $("deleteAccountModal").classList.remove("hidden"); }
+function closeDeleteAccount(){ $("deleteAccountModal").classList.add("hidden"); }
+async function deleteOwnAccount(){
+  if(!$("deleteAccountConfirm").value.trim().toUpperCase().normalize("NFC").includes("LÖSCHEN")) return;
+  const button=$("confirmDeleteAccount"); button.disabled=true; button.textContent="Konto wird gelöscht …";
+  $("deleteAccountMessage").textContent="Deine Daten werden dauerhaft gelöscht.";
+  try{
+    const {data:{session},error:sessionError}=await state.db.auth.getSession();
+    if(sessionError) throw sessionError;
+    if(!session?.access_token) throw new Error("Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.");
+    const {data,error}=await state.db.functions.invoke("mailcore-delete-account",{headers:{Authorization:"Bearer "+session.access_token},body:{}});
+    if(error) throw error;
+    if(!data?.success) throw new Error(data?.error||"Die Löschung wurde nicht bestätigt.");
+    closeDeleteAccount();
+    await state.db.auth.signOut({scope:"local"});
+    showLogin(); setAuthMode("login");
+    authMessage("Dein Konto und die zugehörigen Daten wurden gelöscht.");
+  }catch(error){
+    console.error("MAILCORE account deletion:",error);
+    $("deleteAccountMessage").textContent=error.message||"Die Kontolöschung ist fehlgeschlagen.";
+    $("deleteAccountMessage").classList.add("error");
+    button.disabled=false;button.textContent="Konto endgültig löschen";
+  }
+}
 async function init(){
   if(!window.supabase?.createClient){authMessage("Die Verbindungskomponente konnte nicht geladen werden. Bitte Seite neu laden.",true);return;}
   state.db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
@@ -110,8 +134,14 @@ async function init(){
   $("mobileMenu").addEventListener("click",()=> $("sidebar").classList.contains("open")?closeSidebar():openSidebar());
   $("sidebarClose").addEventListener("click",closeSidebar);
   $("sidebarBackdrop").addEventListener("click",closeSidebar);
-  document.addEventListener("keydown",e=>{if(e.key==="Escape"){closeSidebar();$("userModal").classList.add("hidden");}});
+  document.addEventListener("keydown",e=>{if(e.key==="Escape"){closeSidebar();$("userModal").classList.add("hidden");closeDeleteAccount();}});
   $("refreshBtn").addEventListener("click",async()=>{const button=$("refreshBtn");button.disabled=true;try{await loadChats();if(state.activeChatId)await loadMessages();toast("Chats aktualisiert");}catch(error){toast("Aktualisierung fehlgeschlagen: "+error.message);}finally{button.disabled=false;}});
+  $("accountSettingsBtn").addEventListener("click",openDeleteAccount);
+  $("cancelDeleteAccount").addEventListener("click",closeDeleteAccount);
+  $("cancelDeleteAccountTop").addEventListener("click",closeDeleteAccount);
+  $("deleteAccountModal").addEventListener("click",e=>{if(e.target===$("deleteAccountModal"))closeDeleteAccount();});
+  $("deleteAccountConfirm").addEventListener("input",()=>{$("confirmDeleteAccount").disabled=$("deleteAccountConfirm").value.trim().toUpperCase().normalize("NFC")!=="LÖSCHEN";});
+  $("confirmDeleteAccount").addEventListener("click",deleteOwnAccount);
   $("logoutBtn").addEventListener("click",async()=>{try{await state.db.auth.signOut();showLogin();setAuthMode("login");}catch(error){toast(error.message);}});
   state.db.auth.onAuthStateChange((event,session)=>{if(event==="SIGNED_IN"&&session)enterApp(session);if(event==="SIGNED_OUT")showLogin();});
   const {data,error}=await state.db.auth.getSession();if(error)throw error;if(data.session)await enterApp(data.session);
