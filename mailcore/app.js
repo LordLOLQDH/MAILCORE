@@ -207,12 +207,39 @@ async function addActiveContact(){
  if(!state.activePartner?.id){toast("Person nicht gefunden.");return;}
  try{const {error}=await state.db.from("mailcore_contacts").upsert({owner_id:state.user.id,contact_id:state.activePartner.id},{onConflict:"owner_id,contact_id"});if(error)throw error;toast("Kontakt gespeichert.");}catch(e){toast(e.message);}
 }
+
+async function openHiddenChats(){
+ $("hiddenChatsModal").classList.remove("hidden");$("hiddenChatsList").textContent="Versteckte Chats werden geladen …";
+ try{
+  const {data:controls,error}=await state.db.from("mailcore_chat_controls").select("conversation_id,lock_salt,lock_hash").eq("user_id",state.user.id).eq("is_hidden",true);
+  if(error)throw error;
+  if(!controls?.length){$("hiddenChatsList").textContent="Keine versteckten Chats.";return;}
+  const ids=controls.map(x=>x.conversation_id);
+  const {data:members,error:memberError}=await state.db.from("mailcore_participants").select("conversation_id,user_id,mailcore_profiles(username,display_name)").in("conversation_id",ids).neq("user_id",state.user.id);
+  if(memberError)throw memberError;
+  const memberMap=new Map((members||[]).map(m=>[m.conversation_id,m]));
+  $("hiddenChatsList").innerHTML=controls.map(x=>{const p=memberMap.get(x.conversation_id);const name=p?.mailcore_profiles?.display_name||"Versteckter Chat";return '<button class="user-result" type="button" data-hidden-chat="'+esc(x.conversation_id)+'"><span class="avatar">⌑</span><span class="user-result-copy"><strong>'+esc(name)+'</strong><small>Passwortgeschützt</small></span><span class="result-arrow">Öffnen</span></button>';}).join("");
+  $("hiddenChatsList").querySelectorAll("[data-hidden-chat]").forEach(btn=>btn.addEventListener("click",async()=>{
+   const control=controls.find(x=>x.conversation_id===btn.dataset.hiddenChat);const pass=prompt("Passwort für diesen Chat eingeben.");if(pass===null)return;
+   if(await deriveLock(pass,control.lock_salt)!==control.lock_hash){toast("Falsches Passwort.");return;}
+   const m=memberMap.get(control.conversation_id);const profile=m?.mailcore_profiles||{};const partner={id:m?.user_id,username:profile.username||"nutzer",display_name:profile.display_name||"Chat"};
+   const {error:showError}=await state.db.from("mailcore_chat_controls").update({is_hidden:false,updated_at:new Date().toISOString()}).eq("user_id",state.user.id).eq("conversation_id",control.conversation_id);
+   if(showError){toast(showError.message);return;}
+   $("hiddenChatsModal").classList.add("hidden");await loadChats();await openChat(control.conversation_id,partner);toast("Chat entsperrt.");
+  }));
+ }catch(e){$("hiddenChatsList").textContent="Fehler: "+e.message;}
+}
+
 async function openContacts(){
  $("contactsModal").classList.remove("hidden");$("contactsList").innerHTML="Kontakte werden geladen …";
  try{
-  const {data,error}=await state.db.from("mailcore_contacts").select("contact_id,nickname,mailcore_profiles(username,display_name)").eq("owner_id",state.user.id).order("created_at",{ascending:false});
+  const {data,error}=await state.db.from("mailcore_contacts").select("contact_id,nickname").eq("owner_id",state.user.id).order("created_at",{ascending:false});
   if(error)throw error;
-  $("contactsList").innerHTML=data?.length?data.map(x=>'<div class="contact-row"><span class="avatar">'+esc(initials(x.mailcore_profiles?.display_name))+'</span><span><strong>'+esc(x.nickname||x.mailcore_profiles?.display_name||"Kontakt")+'</strong><small>@'+esc(x.mailcore_profiles?.username||"unbekannt")+'</small></span></div>').join(""):"Noch keine Kontakte gespeichert.";
+  const ids=(data||[]).map(x=>x.contact_id);
+  const {data:profiles,error:profileError}=ids.length?await state.db.from("mailcore_profiles").select("id,username,display_name").in("id",ids):{data:[],error:null};
+  if(profileError)throw profileError;
+  const map=new Map((profiles||[]).map(p=>[p.id,p]));
+  $("contactsList").innerHTML=data?.length?data.map(x=>{const p=map.get(x.contact_id)||{};return '<div class="contact-row"><span class="avatar">'+esc(initials(p.display_name))+'</span><span><strong>'+esc(x.nickname||p.display_name||"Kontakt")+'</strong><small>@'+esc(p.username||"unbekannt")+'</small></span></div>';}).join(""):"Noch keine Kontakte gespeichert.";
  }catch(e){$("contactsList").textContent="Fehler: "+e.message;}
 }
 
@@ -249,6 +276,9 @@ async function init(){
   $("settingsClose").addEventListener("click",closeSettings);
   $("openDeleteFromSettings").addEventListener("click",()=>{closeSettings();openDeleteAccount();});
   $("contactsClose").addEventListener("click",()=>$("contactsModal").classList.add("hidden"));
+  $("hiddenChatsBtn").addEventListener("click",openHiddenChats);
+  $("hiddenChatsClose").addEventListener("click",()=>$("hiddenChatsModal").classList.add("hidden"));
+  $("hiddenChatsModal").addEventListener("click",e=>{if(e.target===$("hiddenChatsModal"))$("hiddenChatsModal").classList.add("hidden");});
   $("contactsModal").addEventListener("click",e=>{if(e.target===$("contactsModal"))$("contactsModal").classList.add("hidden");});
   $("settingsModal").addEventListener("click",e=>{if(e.target===$("settingsModal"))closeSettings();});
   $("settingsForm").addEventListener("submit",saveSettings);
