@@ -4,7 +4,7 @@ const SUPABASE_URL = "https://eopvkwhcgznvubesaszv.supabase.co";
 const SUPABASE_KEY = "sb_publishable_d3hVgDqwTuB63BtfumPwoQ_ngy2ig_c";
 const MAILCORE_URL = "https://lordlolqdh.github.io/mailcore/";
 const $ = id => document.getElementById(id);
-const state = { db:null, user:null, profile:null, chats:[], activeChatId:null, activePartner:null, channel:null, searchTimer:null, heartbeatTimer:null, toastTimer:null, booting:false };
+const state = { db:null, user:null, profile:null, chats:[], activeChatId:null, activePartner:null, channel:null, searchTimer:null, heartbeatTimer:null, toastTimer:null, booting:false, credits:0, inviteClaimed:false };
 const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const initials = name => (String(name || "?").trim().charAt(0) || "?").toUpperCase();
 function toast(message){ $("toast").textContent=message; $("toast").classList.add("show"); clearTimeout(state.toastTimer); state.toastTimer=setTimeout(()=>$("toast").classList.remove("show"),3200); }
@@ -25,6 +25,13 @@ async function ensureProfile(){
   }
   state.profile=data; $("profileName").textContent=data.display_name||data.username; $("profileHandle").textContent="@"+data.username; $("profileAvatar").textContent=initials(data.display_name||data.username);
 }
+async function mailcoreApi(action,payload={}){const {data,error}=await state.db.functions.invoke("mailcore-api",{body:{action,...payload}});if(error)throw new Error(data?.error||error.message||"API-Fehler");if(data?.error)throw new Error(data.error);return data;}
+function updateCredits(value){state.credits=Number(value)||0;["creditPill","aiCreditPill"].forEach(id=>{if($(id))$(id).textContent=state.credits+" Credits";});}
+function aiBubble(role,content){const el=document.createElement("div");el.className="ai-message "+(role==="user"?"user":"assistant");el.textContent=content;return el;}
+async function loadAIHistory(){const data=await mailcoreApi("ai_history");$("aiMessages").innerHTML="";if(!data.messages?.length){const welcome=document.createElement("div");welcome.className="ai-welcome";welcome.textContent="Hi! Ich bin MAILCORE AI. Frag mich etwas oder lass dir beim Schreiben helfen.";$("aiMessages").append(welcome);}else data.messages.forEach(m=>$("aiMessages").append(aiBubble(m.role,m.content)));$("aiMessages").scrollTop=$("aiMessages").scrollHeight;}
+async function openAI(){$("aiModal").classList.remove("hidden");try{const w=await mailcoreApi("wallet");updateCredits(w.credits);await loadAIHistory();}catch(e){toast("KI konnte nicht geladen werden: "+e.message);}$("aiInput").focus();}
+async function sendAI(e){e.preventDefault();const message=$("aiInput").value.trim();if(!message)return;const send=$("aiSend");send.disabled=true;$("aiMessages").append(aiBubble("user",message));$("aiInput").value="";const pending=aiBubble("assistant","MAILCORE AI denkt nach …");$("aiMessages").append(pending);$("aiMessages").scrollTop=$("aiMessages").scrollHeight;try{const result=await mailcoreApi("ai",{message});pending.textContent=result.reply||"Keine Antwort erhalten.";updateCredits(result.credits);}catch(error){pending.textContent="Fehler: "+error.message;try{const w=await mailcoreApi("wallet");updateCredits(w.credits);}catch{}}finally{send.disabled=false;$("aiMessages").scrollTop=$("aiMessages").scrollHeight;$("aiInput").focus();}}
+async function createInvite(){$("inviteModal").classList.remove("hidden");$("inviteLink").value="";$("inviteMessage").textContent="Link wird erstellt …";try{const result=await mailcoreApi("invite");$("inviteLink").value=result.url;$("inviteMessage").textContent="Dein persönlicher Einladungslink ist bereit.";}catch(error){$("inviteMessage").textContent="Fehler: "+error.message;}}
 async function heartbeat(){ if(!state.user)return; const {error}=await state.db.from("mailcore_profiles").update({last_seen_at:new Date().toISOString()}).eq("id",state.user.id); if(error) console.warn("MAILCORE heartbeat:",error.message); }
 async function loadChats(){
   const {data:mine,error}=await state.db.from("mailcore_participants").select("conversation_id").eq("user_id",state.user.id);
