@@ -4,7 +4,7 @@ const SUPABASE_URL = "https://eopvkwhcgznvubesaszv.supabase.co";
 const SUPABASE_KEY = "sb_publishable_d3hVgDqwTuB63BtfumPwoQ_ngy2ig_c";
 const MAILCORE_URL = "https://lordlolqdh.github.io/mailcore/";
 const $ = id => document.getElementById(id);
-const state = { db:null, user:null, profile:null, chats:[], activeChatId:null, activePartner:null, channel:null, searchTimer:null, heartbeatTimer:null, toastTimer:null, booting:false, credits:0, inviteClaimed:false };
+const state = { db:null, user:null, profile:null, chats:[], activeChatId:null, activePartner:null, channel:null, searchTimer:null, heartbeatTimer:null, toastTimer:null, booting:false, credits:0, inviteClaimed:false, chatControl:null, blockedUsers:[] };
 const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const initials = name => (String(name || "?").trim().charAt(0) || "?").toUpperCase();
 function toast(message){ $("toast").textContent=message; $("toast").classList.add("show"); clearTimeout(state.toastTimer); state.toastTimer=setTimeout(()=>$("toast").classList.remove("show"),3200); }
@@ -38,6 +38,8 @@ async function loadChats(){
   if(error) throw error;
   const ids=[...new Set((mine||[]).map(x=>x.conversation_id))];
   if(!ids.length){state.chats=[];renderChats();return;}
+  const {data:controls}=await state.db.from("mailcore_chat_controls").select("conversation_id,is_hidden,is_muted,lock_hash").eq("user_id",state.user.id);
+  const controlMap=new Map((controls||[]).map(x=>[x.conversation_id,x]));
   const [membersResult,messagesResult]=await Promise.all([
     state.db.from("mailcore_participants").select("conversation_id,user_id,mailcore_profiles(username,display_name,last_seen_at)").in("conversation_id",ids),
     state.db.from("mailcore_messages").select("id,conversation_id,sender_id,body,created_at,read_at").in("conversation_id",ids).order("created_at",{ascending:false})
@@ -46,9 +48,9 @@ async function loadChats(){
   const messages=messagesResult.data||[];
   state.chats=ids.map(id=>{
     const member=(membersResult.data||[]).find(x=>x.conversation_id===id&&x.user_id!==state.user.id);
-    const partner=member?.mailcore_profiles||{username:"unbekannt",display_name:"MAILCORE Nutzer"};
-    return {id,partner,latest:messages.find(m=>m.conversation_id===id)||null,unread:messages.filter(m=>m.conversation_id===id&&m.sender_id!==state.user.id&&!m.read_at).length};
-  }).sort((a,b)=>new Date(b.latest?.created_at||0)-new Date(a.latest?.created_at||0));
+    const partner={...(member?.mailcore_profiles||{username:"unbekannt",display_name:"MAILCORE Nutzer"}),id:member?.user_id};
+    return {id,partner,latest:messages.find(m=>m.conversation_id===id)||null,control:controlMap.get(id)||null,unread:messages.filter(m=>m.conversation_id===id&&m.sender_id!==state.user.id&&!m.read_at).length};
+  }).filter(c=>!c.control?.is_hidden).sort((a,b)=>new Date(b.latest?.created_at||0)-new Date(a.latest?.created_at||0));
   renderChats();
 }
 function shortTime(value){if(!value)return"";const d=new Date(value);return d.toDateString()===new Date().toDateString()?d.toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"}):d.toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit"});}
@@ -63,7 +65,7 @@ async function loadMessages(){const {data,error}=await state.db.from("mailcore_m
 async function markRead(id){const {error}=await state.db.from("mailcore_messages").update({read_at:new Date().toISOString()}).eq("conversation_id",id).neq("sender_id",state.user.id).is("read_at",null);if(error)console.warn("Lesestatus:",error.message);const c=state.chats.find(x=>x.id===id);if(c)c.unread=0;renderChats();}
 async function openChat(id,partner){
   state.activeChatId=id;state.activePartner=partner||state.chats.find(c=>c.id===id)?.partner||{display_name:"MAILCORE Nutzer",username:"nutzer"};
-  renderChats();closeSidebar();$("welcomePanel").classList.add("hidden");$("conversation").classList.remove("hidden");
+  renderChats();closeSidebar();await loadChatControl(id);$("blockUserBtn").textContent=state.blockedUsers.includes(state.activePartner.id)?"Blockierung aufheben":"Person blockieren";$("welcomePanel").classList.add("hidden");$("conversation").classList.remove("hidden");
   $("conversationPerson").innerHTML='<div class="avatar">'+esc(initials(state.activePartner.display_name))+'</div><div><strong>'+esc(state.activePartner.display_name)+'</strong><small>@'+esc(state.activePartner.username||"nutzer")+'</small></div>';
   if(state.channel){await state.db.removeChannel(state.channel);state.channel=null;}
   await loadMessages(); await markRead(id);
@@ -72,7 +74,7 @@ async function openChat(id,partner){
 async function enterApp(session){
   if(state.booting||state.user?.id===session.user.id)return;
   state.booting=true;state.user=session.user;
-  try{$("authView").classList.add("hidden");$("chatView").classList.remove("hidden");await ensureProfile();if(!state.inviteClaimed){state.inviteClaimed=true;const code=new URLSearchParams(location.search).get("invite");if(code){try{const claim=await mailcoreApi("claim_invite",{code});if(claim.claimed)toast("Einladung eingelöst. 10 Bonus-Credits erhalten.");history.replaceState({},document.title,location.pathname);}catch(e){console.warn("Einladung:",e.message);}}}try{const wallet=await mailcoreApi("wallet");updateCredits(wallet.credits);}catch(e){console.warn("Credits:",e.message);}await loadChats();await heartbeat();clearInterval(state.heartbeatTimer);state.heartbeatTimer=setInterval(heartbeat,60000);}
+  try{$("authView").classList.add("hidden");$("chatView").classList.remove("hidden");await ensureProfile();const {data:blockedRows}=await state.db.from("mailcore_blocks").select("blocked_id").eq("owner_id",state.user.id);state.blockedUsers=(blockedRows||[]).map(x=>x.blocked_id);await loadAppearance();if(!state.inviteClaimed){state.inviteClaimed=true;const code=new URLSearchParams(location.search).get("invite");if(code){try{const claim=await mailcoreApi("claim_invite",{code});if(claim.claimed)toast("Einladung eingelöst. 10 Bonus-Credits erhalten.");history.replaceState({},document.title,location.pathname);}catch(e){console.warn("Einladung:",e.message);}}}try{const wallet=await mailcoreApi("wallet");updateCredits(wallet.credits);}catch(e){console.warn("Credits:",e.message);}await loadChats();await heartbeat();clearInterval(state.heartbeatTimer);state.heartbeatTimer=setInterval(heartbeat,60000);}
   catch(error){console.error(error);toast("MAILCORE konnte nicht geladen werden: "+(error.message||"Unbekannter Fehler"));showLogin();authMessage("Backend-Fehler: "+(error.message||"Bitte später erneut versuchen."),true);}
   finally{state.booting=false;}
 }
@@ -86,7 +88,7 @@ async function searchUsers(){
   $("userResults").innerHTML=data.map(p=>'<button type="button" class="user-result" data-user="'+esc(p.id)+'" data-username="'+esc(p.username)+'" data-display="'+esc(p.display_name)+'"><span class="avatar">'+esc(initials(p.display_name))+'</span><span class="user-result-copy"><strong>'+esc(p.display_name)+'</strong><small>@'+esc(p.username)+'</small></span><span class="result-arrow">→</span></button>').join("");
 }
 async function startDirectChat(row){
-  const target=row.dataset.user,partner={display_name:row.dataset.display||"MAILCORE Nutzer",username:row.dataset.username||"nutzer"};
+  const target=row.dataset.user,partner={id:target,display_name:row.dataset.display||"MAILCORE Nutzer",username:row.dataset.username||"nutzer"};
   $("userModal").classList.add("hidden");row.disabled=true;
   try{const {data,error}=await state.db.rpc("mailcore_create_direct_chat",{p_target_user_id:target});if(error)throw error;const id=typeof data==="string"?data:data?.id||data?.conversation_id;if(!id)throw new Error("Die Chat-ID wurde vom Server nicht zurückgegeben.");await loadChats();await openChat(id,partner);}
   catch(error){toast("Chat konnte nicht gestartet werden: "+error.message);row.disabled=false;}
@@ -115,6 +117,105 @@ async function deleteOwnAccount(){
     button.disabled=false;button.textContent="Konto endgültig löschen";
   }
 }
+
+async function loadAppearance(){
+ const {data,error}=await state.db.from("mailcore_user_settings").select("*").eq("user_id",state.user.id).maybeSingle();
+ if(error)throw error;
+ const settings=data||{theme:"light",accent_color:"#4778e8"};
+ $("themeSelect").value=settings.theme||"light";$("accentColor").value=settings.accent_color||"#4778e8";applyAppearance();
+}
+function applyAppearance(){
+ const theme=$("themeSelect").value;const accent=$("accentColor").value;
+ document.documentElement.dataset.theme=theme==="system"?(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):theme;
+ document.documentElement.style.setProperty("--accent",accent);
+}
+function openSettings(){
+ $("settingsDisplayName").value=state.profile?.display_name||"";
+ $("settingsUsername").value=state.profile?.username||"";
+ $("settingsAbout").value=state.profile?.about||"";
+ $("settingsEmail").value=state.user?.email||"";
+ $("settingsPassword").value="";$("settingsMessage").textContent="";
+ $("settingsModal").classList.remove("hidden");loadAppearance().catch(e=>toast("Einstellungen: "+e.message));
+}
+function closeSettings(){$("settingsModal").classList.add("hidden");}
+async function saveSettings(e){
+ e.preventDefault();const btn=$("settingsSave");btn.disabled=true;btn.textContent="Speichern …";
+ try{
+  const display_name=$("settingsDisplayName").value.trim(),username=$("settingsUsername").value.trim().replace(/^@/,"").toLowerCase(),about=$("settingsAbout").value.trim();
+  if(!/^[a-z0-9_]{3,24}$/.test(username))throw new Error("@-Name: 3 bis 24 Zeichen, nur a-z, 0-9 und _.");
+  const {data,error}=await state.db.from("mailcore_profiles").update({display_name,username,about,updated_at:new Date().toISOString()}).eq("id",state.user.id).select().single();
+  if(error)throw error;state.profile=data;
+  const newEmail=$("settingsEmail").value.trim();
+  if(newEmail&&newEmail!==state.user.email){const {error:emailError}=await state.db.auth.updateUser({email:newEmail});if(emailError)throw emailError;$("settingsMessage").textContent="Profil gespeichert. Bitte bestätige die neue E-Mail-Adresse über deinen Posteingang.";}
+  const newPassword=$("settingsPassword").value;
+  if(newPassword){if(newPassword.length<8)throw new Error("Das neue Passwort muss mindestens 8 Zeichen haben.");const {error:pwError}=await state.db.auth.updateUser({password:newPassword});if(pwError)throw pwError;}
+  const {error:prefError}=await state.db.from("mailcore_user_settings").upsert({user_id:state.user.id,theme:$("themeSelect").value,accent_color:$("accentColor").value,updated_at:new Date().toISOString()},{onConflict:"user_id"});
+  if(prefError)throw prefError;
+  $("profileName").textContent=data.display_name;$("profileHandle").textContent="@"+data.username;$("profileAvatar").textContent=initials(data.display_name);
+  $("settingsMessage").textContent=$("settingsMessage").textContent||"Änderungen gespeichert.";toast("Profil aktualisiert.");
+ }catch(error){$("settingsMessage").textContent=error.message||"Speichern fehlgeschlagen.";}
+ finally{btn.disabled=false;btn.textContent="Änderungen speichern";}
+}
+async function loadChatControl(id){
+ const {data,error}=await state.db.from("mailcore_chat_controls").select("*").eq("user_id",state.user.id).eq("conversation_id",id).maybeSingle();
+ if(error)throw error;state.chatControl=data||null;
+ $("muteChatBtn").textContent=data?.is_muted?"Stummschaltung aufheben":"Stummschalten";
+ $("hideChatBtn").textContent=data?.is_hidden?"Chat wieder anzeigen":"Chat verstecken";
+ $("lockChatBtn").textContent=data?.lock_hash?"Chatsperre ändern":"Chat mit Passwort sperren";
+}
+async function saveChatControl(patch){
+ if(!state.activeChatId)throw new Error("Wähle zuerst einen Chat aus.");
+ const next={user_id:state.user.id,conversation_id:state.activeChatId,...(state.chatControl||{}),...patch,updated_at:new Date().toISOString()};
+ const {data,error}=await state.db.from("mailcore_chat_controls").upsert(next,{onConflict:"user_id,conversation_id"}).select().single();
+ if(error)throw error;state.chatControl=data;await loadChats();await loadChatControl(state.activeChatId);
+}
+async function toggleMuteChat(){try{await saveChatControl({is_muted:!state.chatControl?.is_muted});toast(state.chatControl?.is_muted?"Chat stummgeschaltet.":"Stummschaltung aufgehoben.");}catch(e){toast(e.message);}}
+async function toggleHideChat(){try{await saveChatControl({is_hidden:!state.chatControl?.is_hidden});if(state.chatControl?.is_hidden){$("conversation").classList.add("hidden");$("welcomePanel").classList.remove("hidden");state.activeChatId=null;}toast("Chatliste aktualisiert.");}catch(e){toast(e.message);}}
+async function deriveLock(password,salt){
+ const enc=new TextEncoder();const material=await crypto.subtle.importKey("raw",enc.encode(password),"PBKDF2",false,["deriveBits"]);
+ const bits=await crypto.subtle.deriveBits({name:"PBKDF2",salt:enc.encode(salt),iterations:180000,hash:"SHA-256"},material,256);
+ return Array.from(new Uint8Array(bits),b=>b.toString(16).padStart(2,"0")).join("");
+}
+async function toggleChatLock(){
+ try{
+  if(state.chatControl?.lock_hash){
+   const old=prompt("Aktuelles Chat-Passwort eingeben, um die Sperre zu entfernen oder zu ändern.");if(old===null)return;
+   if(await deriveLock(old,state.chatControl.lock_salt)!==state.chatControl.lock_hash)throw new Error("Falsches Passwort.");
+   const next=prompt("Neues Passwort eingeben. Leer lassen, um die Sperre zu entfernen.");if(next===null)return;
+   if(!next){await saveChatControl({lock_hash:null,lock_salt:null});toast("Chatsperre entfernt.");return;}
+   if(next.length<6)throw new Error("Mindestens 6 Zeichen verwenden.");
+   const salt=crypto.randomUUID();await saveChatControl({lock_salt:salt,lock_hash:await deriveLock(next,salt)});
+  }else{
+   const password=prompt("Passwort für diesen versteckten Chat festlegen (mindestens 6 Zeichen).");if(password===null)return;
+   if(password.length<6)throw new Error("Mindestens 6 Zeichen verwenden.");
+   const salt=crypto.randomUUID();await saveChatControl({lock_salt:salt,lock_hash:await deriveLock(password,salt),is_hidden:true});
+  }
+  toast("Chatsperre aktualisiert.");
+ }catch(e){toast(e.message);}
+}
+async function toggleBlockUser(){
+ if(!state.activePartner?.id){toast("Profil der Person konnte nicht zugeordnet werden.");return;}
+ const blocked=state.blockedUsers.includes(state.activePartner.id);
+ if(!blocked&&!confirm("@"+state.activePartner.username+" blockieren?"))return;
+ try{
+  if(blocked){const {error}=await state.db.from("mailcore_blocks").delete().eq("owner_id",state.user.id).eq("blocked_id",state.activePartner.id);if(error)throw error;state.blockedUsers=state.blockedUsers.filter(x=>x!==state.activePartner.id);}
+  else{const {error}=await state.db.from("mailcore_blocks").insert({owner_id:state.user.id,blocked_id:state.activePartner.id});if(error)throw error;state.blockedUsers.push(state.activePartner.id);}
+  $("blockUserBtn").textContent=blocked?"Person blockieren":"Blockierung aufheben";await loadChats();toast(blocked?"Blockierung aufgehoben.":"Person blockiert.");
+ }catch(e){toast(e.message);}
+}
+async function addActiveContact(){
+ if(!state.activePartner?.id){toast("Person nicht gefunden.");return;}
+ try{const {error}=await state.db.from("mailcore_contacts").upsert({owner_id:state.user.id,contact_id:state.activePartner.id},{onConflict:"owner_id,contact_id"});if(error)throw error;toast("Kontakt gespeichert.");}catch(e){toast(e.message);}
+}
+async function openContacts(){
+ $("contactsModal").classList.remove("hidden");$("contactsList").innerHTML="Kontakte werden geladen …";
+ try{
+  const {data,error}=await state.db.from("mailcore_contacts").select("contact_id,nickname,mailcore_profiles(username,display_name)").eq("owner_id",state.user.id).order("created_at",{ascending:false});
+  if(error)throw error;
+  $("contactsList").innerHTML=data?.length?data.map(x=>'<div class="contact-row"><span class="avatar">'+esc(initials(x.mailcore_profiles?.display_name))+'</span><span><strong>'+esc(x.nickname||x.mailcore_profiles?.display_name||"Kontakt")+'</strong><small>@'+esc(x.mailcore_profiles?.username||"unbekannt")+'</small></span></div>').join(""):"Noch keine Kontakte gespeichert.";
+ }catch(e){$("contactsList").textContent="Fehler: "+e.message;}
+}
+
 async function init(){
   if(!window.supabase?.createClient){authMessage("Die Verbindungskomponente konnte nicht geladen werden. Bitte Seite neu laden.",true);return;}
   state.db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
@@ -141,10 +242,24 @@ async function init(){
   $("mobileMenu").addEventListener("click",()=> $("sidebar").classList.contains("open")?closeSidebar():openSidebar());
   $("sidebarClose").addEventListener("click",closeSidebar);
   $("sidebarBackdrop").addEventListener("click",closeSidebar);
-  document.addEventListener("keydown",e=>{if(e.key==="Escape"){closeSidebar();$("userModal").classList.add("hidden");closeDeleteAccount();}});
+  document.addEventListener("keydown",e=>{if(e.key==="Escape"){closeSidebar();$("userModal").classList.add("hidden");closeDeleteAccount();closeSettings();$("contactsModal").classList.add("hidden");}});
   $("refreshBtn").addEventListener("click",async()=>{const button=$("refreshBtn");button.disabled=true;try{await loadChats();if(state.activeChatId)await loadMessages();toast("Chats aktualisiert");}catch(error){toast("Aktualisierung fehlgeschlagen: "+error.message);}finally{button.disabled=false;}});
-  $("accountSettingsBtn").addEventListener("click",openDeleteAccount);
+  $("accountSettingsBtn").addEventListener("click",openSettings);
   $("inviteBtn").addEventListener("click",createInvite);
+  $("settingsClose").addEventListener("click",closeSettings);
+  $("openDeleteFromSettings").addEventListener("click",()=>{closeSettings();openDeleteAccount();});
+  $("contactsClose").addEventListener("click",()=>$("contactsModal").classList.add("hidden"));
+  $("contactsModal").addEventListener("click",e=>{if(e.target===$("contactsModal"))$("contactsModal").classList.add("hidden");});
+  $("settingsModal").addEventListener("click",e=>{if(e.target===$("settingsModal"))closeSettings();});
+  $("settingsForm").addEventListener("submit",saveSettings);
+  $("themeSelect").addEventListener("change",applyAppearance);
+  $("accentColor").addEventListener("input",applyAppearance);
+  $("addContactBtn").addEventListener("click",addActiveContact);
+  $("muteChatBtn").addEventListener("click",toggleMuteChat);
+  $("hideChatBtn").addEventListener("click",toggleHideChat);
+  $("lockChatBtn").addEventListener("click",toggleChatLock);
+  $("blockUserBtn").addEventListener("click",toggleBlockUser);
+  $("contactsBtn").addEventListener("click",openContacts);
   $("closeInvite").addEventListener("click",()=>$("inviteModal").classList.add("hidden"));
   $("inviteModal").addEventListener("click",e=>{if(e.target===$("inviteModal"))$("inviteModal").classList.add("hidden");});
   $("copyInvite").addEventListener("click",async()=>{try{await navigator.clipboard.writeText($("inviteLink").value);$("inviteMessage").textContent="Einladungslink kopiert.";}catch{$("inviteLink").select();$("inviteMessage").textContent="Link markieren und kopieren.";}});
