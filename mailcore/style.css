@@ -354,3 +354,5 @@ body{background:#eef2f5;color:var(--ink);font-family:"DM Sans",system-ui,sans-se
 @media(orientation:landscape) and (max-height:560px){.chat-app{height:100dvh;margin:0;border-radius:0}.topbar{min-height:58px}.composer{margin-bottom:8px}}
 
 .admin-side-btn{display:block;width:calc(100% - 24px);margin:10px 12px 0;text-align:center;padding:11px;border-color:rgba(254,90,0,.25);background:#fff8f3;color:#b94700;font-weight:700}.admin-side-btn.hidden{display:none}
+
+.admin-side-btn{display:block;width:calc(100% - 24px);margin:10px 12px 0;text-align:center;padding:11px;border-color:rgba(254,90,0,.25);background:#fff8f3;color:#b94700;font-weight:700}.admin-side-btn.hidden{display:none}
