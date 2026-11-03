@@ -72,7 +72,7 @@ async function openChat(id,partner){
 async function enterApp(session){
   if(state.booting||state.user?.id===session.user.id)return;
   state.booting=true;state.user=session.user;
-  try{$("authView").classList.add("hidden");$("chatView").classList.remove("hidden");await ensureProfile();await loadChats();await heartbeat();clearInterval(state.heartbeatTimer);state.heartbeatTimer=setInterval(heartbeat,60000);}
+  try{$("authView").classList.add("hidden");$("chatView").classList.remove("hidden");await ensureProfile();if(!state.inviteClaimed){state.inviteClaimed=true;const code=new URLSearchParams(location.search).get("invite");if(code){try{const claim=await mailcoreApi("claim_invite",{code});if(claim.claimed)toast("Einladung eingelöst. 10 Bonus-Credits erhalten.");history.replaceState({},document.title,location.pathname);}catch(e){console.warn("Einladung:",e.message);}}}try{const wallet=await mailcoreApi("wallet");updateCredits(wallet.credits);}catch(e){console.warn("Credits:",e.message);}await loadChats();await heartbeat();clearInterval(state.heartbeatTimer);state.heartbeatTimer=setInterval(heartbeat,60000);}
   catch(error){console.error(error);toast("MAILCORE konnte nicht geladen werden: "+(error.message||"Unbekannter Fehler"));showLogin();authMessage("Backend-Fehler: "+(error.message||"Bitte später erneut versuchen."),true);}
   finally{state.booting=false;}
 }
@@ -144,6 +144,14 @@ async function init(){
   document.addEventListener("keydown",e=>{if(e.key==="Escape"){closeSidebar();$("userModal").classList.add("hidden");closeDeleteAccount();}});
   $("refreshBtn").addEventListener("click",async()=>{const button=$("refreshBtn");button.disabled=true;try{await loadChats();if(state.activeChatId)await loadMessages();toast("Chats aktualisiert");}catch(error){toast("Aktualisierung fehlgeschlagen: "+error.message);}finally{button.disabled=false;}});
   $("accountSettingsBtn").addEventListener("click",openDeleteAccount);
+  $("inviteBtn").addEventListener("click",createInvite);
+  $("closeInvite").addEventListener("click",()=>$("inviteModal").classList.add("hidden"));
+  $("inviteModal").addEventListener("click",e=>{if(e.target===$("inviteModal"))$("inviteModal").classList.add("hidden");});
+  $("copyInvite").addEventListener("click",async()=>{try{await navigator.clipboard.writeText($("inviteLink").value);$("inviteMessage").textContent="Einladungslink kopiert.";}catch{$("inviteLink").select();$("inviteMessage").textContent="Link markieren und kopieren.";}});
+  $("aiBtn").addEventListener("click",openAI);
+  $("closeAI").addEventListener("click",()=>$("aiModal").classList.add("hidden"));
+  $("aiModal").addEventListener("click",e=>{if(e.target===$("aiModal"))$("aiModal").classList.add("hidden");});
+  $("aiForm").addEventListener("submit",sendAI);
   $("cancelDeleteAccount").addEventListener("click",closeDeleteAccount);
   $("cancelDeleteAccountTop").addEventListener("click",closeDeleteAccount);
   $("deleteAccountModal").addEventListener("click",e=>{if(e.target===$("deleteAccountModal"))closeDeleteAccount();});
