@@ -162,3 +162,24 @@ button{transition:background .18s,border-color .18s,box-shadow .18s,transform .1
  .conversation-person small{font-size:9px}
  .credit-pill{padding:5px 6px}
 }
+
+/* MAILCORE 0.9.0 account and privacy controls */
+:root{--accent:#4778e8}
+.primary-btn,.send-button,.brand-mark{background:var(--accent)!important}
+.chat-action{font-size:10px;padding:0 9px;height:34px}
+.settings-modal{max-width:540px;max-height:90dvh;overflow:auto}
+.settings-form{display:grid;gap:12px}
+.settings-section-title{font-size:10px;letter-spacing:.12em;font-weight:800;color:var(--accent);text-transform:uppercase;margin-top:8px}
+.settings-form select,.settings-form input[type=color]{width:100%;min-height:44px;border:1px solid var(--line,#dce3ef);border-radius:11px;padding:9px 12px;background:var(--surface,#fff);color:var(--text,#172033);font:inherit}
+.settings-form input[type=color]{padding:4px}
+.settings-delete{margin-top:14px;width:100%}
+.contacts-list{display:grid;gap:8px;max-height:55dvh;overflow:auto}
+.contact-row{display:flex;align-items:center;gap:12px;padding:10px;border:1px solid var(--line,#e5eaf2);border-radius:12px}
+.contact-row span:nth-child(2){display:grid;gap:3px}
+.contact-row small{color:var(--muted,#738096)}
+html[data-theme="dark"] body{background:#10141c;color:#edf2fa}
+html[data-theme="dark"] .chat-app,html[data-theme="dark"] .sidebar,html[data-theme="dark"] .conversation-panel,html[data-theme="dark"] .user-modal{background:#171d28;color:#edf2fa}
+html[data-theme="dark"] .topbar,html[data-theme="dark"] .profile-card,html[data-theme="dark"] .chat-item,html[data-theme="dark"] .search-box,html[data-theme="dark"] .settings-form input,html[data-theme="dark"] .settings-form select{background:#1e2634;color:#edf2fa;border-color:#303b4d}
+html[data-theme="dark"] .chat-item:hover,html[data-theme="dark"] .chat-item.active{background:#26344b}
+html[data-theme="dark"] .auth-field input,html[data-theme="dark"] .composer textarea{background:#1e2634;color:#edf2fa;border-color:#303b4d}
+@media(max-width:900px){.chat-action{display:none}.top-actions #contactsBtn{display:none}}
