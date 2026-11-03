@@ -63,7 +63,12 @@ function renderMessage(m){const mine=m.sender_id===state.user.id;return '<articl
 function appendMessage(m){if(m.conversation_id!==state.activeChatId||$("messages").querySelector('[data-message="'+CSS.escape(String(m.id))+'"]'))return;$("messages").insertAdjacentHTML("beforeend",renderMessage(m));$("messages").scrollTop=$("messages").scrollHeight;}
 async function loadMessages(){const {data,error}=await state.db.from("mailcore_messages").select("*").eq("conversation_id",state.activeChatId).order("created_at",{ascending:true}).limit(300);if(error)throw error;$("messages").innerHTML=(data||[]).map(renderMessage).join("");$("messages").scrollTop=$("messages").scrollHeight;}
 async function markRead(id){const {error}=await state.db.from("mailcore_messages").update({read_at:new Date().toISOString()}).eq("conversation_id",id).neq("sender_id",state.user.id).is("read_at",null);if(error)console.warn("Lesestatus:",error.message);const c=state.chats.find(x=>x.id===id);if(c)c.unread=0;renderChats();}
-async function openChat(id,partner){
+async function openChat(id,partner,unlocked=false){
+  const existingControl=state.chats.find(c=>c.id===id)?.control;
+  if(existingControl?.lock_hash&&!unlocked){
+    const pass=prompt("Dieser Chat ist gesperrt. Passwort eingeben.");if(pass===null)return;
+    if(await deriveLock(pass,existingControl.lock_salt)!==existingControl.lock_hash){toast("Falsches Passwort.");return;}
+  }
   state.activeChatId=id;state.activePartner=partner||state.chats.find(c=>c.id===id)?.partner||{display_name:"MAILCORE Nutzer",username:"nutzer"};
   renderChats();closeSidebar();await loadChatControl(id);$("blockUserBtn").textContent=state.blockedUsers.includes(state.activePartner.id)?"Blockierung aufheben":"Person blockieren";$("welcomePanel").classList.add("hidden");$("conversation").classList.remove("hidden");
   $("conversationPerson").innerHTML='<div class="avatar">'+esc(initials(state.activePartner.display_name))+'</div><div><strong>'+esc(state.activePartner.display_name)+'</strong><small>@'+esc(state.activePartner.username||"nutzer")+'</small></div>';
@@ -223,9 +228,7 @@ async function openHiddenChats(){
    const control=controls.find(x=>x.conversation_id===btn.dataset.hiddenChat);const pass=prompt("Passwort für diesen Chat eingeben.");if(pass===null)return;
    if(await deriveLock(pass,control.lock_salt)!==control.lock_hash){toast("Falsches Passwort.");return;}
    const m=memberMap.get(control.conversation_id);const profile=m?.mailcore_profiles||{};const partner={id:m?.user_id,username:profile.username||"nutzer",display_name:profile.display_name||"Chat"};
-   const {error:showError}=await state.db.from("mailcore_chat_controls").update({is_hidden:false,updated_at:new Date().toISOString()}).eq("user_id",state.user.id).eq("conversation_id",control.conversation_id);
-   if(showError){toast(showError.message);return;}
-   $("hiddenChatsModal").classList.add("hidden");await loadChats();await openChat(control.conversation_id,partner);toast("Chat entsperrt.");
+   $("hiddenChatsModal").classList.add("hidden");await openChat(control.conversation_id,partner,true);toast("Chat entsperrt.");
   }));
  }catch(e){$("hiddenChatsList").textContent="Fehler: "+e.message;}
 }
