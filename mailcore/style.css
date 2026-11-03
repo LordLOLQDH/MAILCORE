@@ -189,3 +189,14 @@ html[data-theme="dark"] .auth-field input,html[data-theme="dark"] .composer text
 .top-actions::-webkit-scrollbar{display:none}
 @media(max-width:900px){.chat-action{display:inline-flex}.top-actions #contactsBtn,.top-actions #hiddenChatsBtn{display:inline-flex}.top-actions{max-width:64vw;gap:5px}.feature-btn{flex-shrink:0}}
 @media(max-width:520px){.top-actions{max-width:58vw}.chat-action{font-size:9px;padding:0 7px}.top-actions .feature-btn{height:32px}}
+
+/* MAILCORE 1.0.0 Admin Center */
+.admin-modal{width:min(760px,calc(100vw - 28px));max-height:92dvh;overflow:auto}
+.admin-modal textarea,.admin-modal input{width:100%;padding:12px;border:1px solid var(--line,#dce3ef);border-radius:11px;background:var(--surface,#fff);color:var(--text,#172033);font:inherit;margin:8px 0}
+.admin-modal .danger-btn{background:#c62828;color:#fff;border:0;border-radius:10px;padding:12px 16px;font-weight:700}
+.admin-users{display:grid;gap:8px;margin-top:10px}
+.admin-user{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid var(--line,#e5eaf2);border-radius:12px}
+.admin-user>div{display:grid;gap:4px;min-width:0}
+.admin-user small{color:var(--muted,#738096);overflow-wrap:anywhere}
+.admin-user button{flex-shrink:0;padding:8px 12px;border-radius:9px}
+@media(max-width:520px){.admin-user{align-items:flex-start}.admin-user button{font-size:10px}.admin-modal{padding:16px}}
