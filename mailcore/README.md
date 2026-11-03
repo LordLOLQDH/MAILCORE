@@ -6,7 +6,19 @@ MAILCORE ist jetzt ein browserbasierter Live-Messenger. Das Frontend wird über 
 
 https://lordlolqdh.github.io/mailcore/
 
-## Version 0.4.0\n\n- Einheitliches helles Weiß-Blau-Design mit versionierten Assets gegen Browser-Cache-Probleme\n- Stabilerer App-Start und Schutz vor doppelter Anmeldung/Initialisierung\n- Sichtbare Fehlermeldungen bei Backend-, Chat- und Nachrichtenproblemen\n- Überarbeitete Chat- und Nutzersuche sowie mobile Navigation\n\n## Version 0.4.0\n\n- Google-OAuth-Schaltfläche ergänzt (Google-Anbieter muss in Supabase konfiguriert werden)\n- Mobile Seitenleiste lässt sich über X, erneuten Menü-Klick, Klick auf den abgedunkelten Hintergrund oder Escape schließen\n\n## Funktionen
+## Version 0.4.0
+
+- Einheitliches helles Weiß-Blau-Design mit versionierten Assets gegen Browser-Cache-Probleme
+- Stabilerer App-Start und Schutz vor doppelter Anmeldung/Initialisierung
+- Sichtbare Fehlermeldungen bei Backend-, Chat- und Nachrichtenproblemen
+- Überarbeitete Chat- und Nutzersuche sowie mobile Navigation
+
+## Version 0.4.0
+
+- Google-OAuth-Schaltfläche ergänzt (Google-Anbieter muss in Supabase konfiguriert werden)
+- Mobile Seitenleiste lässt sich über X, erneuten Menü-Klick, Klick auf den abgedunkelten Hintergrund oder Escape schließen
+
+## Funktionen
 
 - Registrierung und Anmeldung mit E-Mail und Passwort
 - Nutzerprofile mit automatisch erzeugtem MAILCORE-Benutzernamen
@@ -33,7 +45,7 @@ Row Level Security ist für alle MAILCORE-Tabellen aktiviert. Nutzer können nur
 
 Das Frontend nutzt den öffentlichen Supabase Publishable Key. Ein Service-Role-Key wird niemals im Browser verwendet.
 
-## Einrichtung in Supabase Auth
+## Google-Anmeldung aktivieren\n\nDie Google-Schaltfläche ist im Frontend eingebaut. Für echte Anmeldungen muss Google OAuth noch einmalig eingerichtet werden:\n\n1. In Google Cloud ein OAuth-2.0-Client-ID vom Typ Webanwendung erstellen.\n2. Als autorisierte Weiterleitungs-URI exakt `https://eopvkwhcgznvubesaszv.supabase.co/auth/v1/callback` eintragen.\n3. In Supabase unter Authentication → Sign In / Providers → Google den Anbieter aktivieren und Client-ID sowie Client-Secret aus Google Cloud eintragen.\n4. Unter Authentication → URL Configuration `https://lordlolqdh.github.io/mailcore/` als Redirect URL erlauben (die bestehende Wildcard `https://lordlolqdh.github.io/**` deckt sie ebenfalls ab).\n\nGoogle Client Secret niemals in GitHub oder den Frontend-Code eintragen.\n\n## Einrichtung in Supabase Auth
 
 In Supabase unter **Authentication → URL Configuration**:
 
