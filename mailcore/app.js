@@ -4,7 +4,7 @@ const SUPABASE_URL = "https://eopvkwhcgznvubesaszv.supabase.co";
 const SUPABASE_KEY = "sb_publishable_d3hVgDqwTuB63BtfumPwoQ_ngy2ig_c";
 const MAILCORE_URL = "https://lordlolqdh.github.io/mailcore/";
 const $ = id => document.getElementById(id);
-const state = { db:null, user:null, profile:null, chats:[], activeChatId:null, activePartner:null, channel:null, searchTimer:null, heartbeatTimer:null, toastTimer:null, booting:false, credits:0, inviteClaimed:false, chatControl:null, blockedUsers:[] };
+const state = { db:null, user:null, profile:null, chats:[], activeChatId:null, activePartner:null, channel:null, searchTimer:null, heartbeatTimer:null, toastTimer:null, booting:false, credits:0, inviteClaimed:false, chatControl:null, blockedUsers:[], isAdmin:false };
 const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const initials = name => (String(name || "?").trim().charAt(0) || "?").toUpperCase();
 function toast(message){ $("toast").textContent=message; $("toast").classList.add("show"); clearTimeout(state.toastTimer); state.toastTimer=setTimeout(()=>$("toast").classList.remove("show"),3200); }
@@ -25,7 +25,15 @@ async function ensureProfile(){
   }
   state.profile=data; $("profileName").textContent=data.display_name||data.username; $("profileHandle").textContent="@"+data.username; $("profileAvatar").textContent=initials(data.display_name||data.username);
 }
-async function mailcoreApi(action,payload={}){const {data,error}=await state.db.functions.invoke("mailcore-api",{body:{action,...payload}});if(error)throw new Error(data?.error||error.message||"API-Fehler");if(data?.error)throw new Error(data.error);return data;}
+async function mailcoreApi(action,payload={}){
+ const {data,error}=await state.db.functions.invoke("mailcore-api",{body:{action,...payload}});
+ if(error){
+  let detail=data?.error;
+  try{if(!detail&&error.context?.clone)detail=(await error.context.clone().json())?.error;}catch{}
+  throw new Error(detail||error.message||"API-Fehler");
+ }
+ if(data?.error)throw new Error(data.error);return data;
+}
 function updateCredits(value){state.credits=Number(value)||0;["creditPill","aiCreditPill"].forEach(id=>{if($(id))$(id).textContent=state.credits+" Credits";});}
 function aiBubble(role,content){const el=document.createElement("div");el.className="ai-message "+(role==="user"?"user":"assistant");el.textContent=content;return el;}
 async function loadAIHistory(){const data=await mailcoreApi("ai_history");$("aiMessages").innerHTML="";if(!data.messages?.length){const welcome=document.createElement("div");welcome.className="ai-welcome";welcome.textContent="Hi! Ich bin MAILCORE AI. Frag mich etwas oder lass dir beim Schreiben helfen.";$("aiMessages").append(welcome);}else data.messages.forEach(m=>$("aiMessages").append(aiBubble(m.role,m.content)));$("aiMessages").scrollTop=$("aiMessages").scrollHeight;}
@@ -79,7 +87,9 @@ async function openChat(id,partner,unlocked=false){
 async function enterApp(session){
   if(state.booting||state.user?.id===session.user.id)return;
   state.booting=true;state.user=session.user;
-  try{$("authView").classList.add("hidden");$("chatView").classList.remove("hidden");await ensureProfile();const {data:blockedRows}=await state.db.from("mailcore_blocks").select("blocked_id").eq("owner_id",state.user.id);state.blockedUsers=(blockedRows||[]).map(x=>x.blocked_id);await loadAppearance();if(!state.inviteClaimed){state.inviteClaimed=true;const code=new URLSearchParams(location.search).get("invite");if(code){try{const claim=await mailcoreApi("claim_invite",{code});if(claim.claimed)toast("Einladung eingelöst. 10 Bonus-Credits erhalten.");history.replaceState({},document.title,location.pathname);}catch(e){console.warn("Einladung:",e.message);}}}try{const wallet=await mailcoreApi("wallet");updateCredits(wallet.credits);}catch(e){console.warn("Credits:",e.message);}await loadChats();await heartbeat();clearInterval(state.heartbeatTimer);state.heartbeatTimer=setInterval(heartbeat,60000);}
+  try{$("authView").classList.add("hidden");$("chatView").classList.remove("hidden");await ensureProfile();const {data:blockedRows}=await state.db.from("mailcore_blocks").select("blocked_id").eq("owner_id",state.user.id);state.blockedUsers=(blockedRows||[]).map(x=>x.blocked_id);await loadAppearance();if(!state.inviteClaimed){state.inviteClaimed=true;const code=new URLSearchParams(location.search).get("invite");if(code){try{const claim=await mailcoreApi("claim_invite",{code});if(claim.claimed)toast("Einladung eingelöst. 10 Bonus-Credits erhalten.");history.replaceState({},document.title,location.pathname);}catch(e){console.warn("Einladung:",e.message);}}}try{const wallet=await mailcoreApi("wallet");updateCredits(wallet.credits);}catch(e){console.warn("Credits:",e.message);toast("Guthaben konnte nicht geladen werden: "+e.message);}
+  try{const role=await mailcoreApi("admin_check");state.isAdmin=!!role.is_admin;$("adminBtn").classList.toggle("hidden",!state.isAdmin);}catch{state.isAdmin=false;$("adminBtn").classList.add("hidden");}
+  await loadChats();await heartbeat();clearInterval(state.heartbeatTimer);state.heartbeatTimer=setInterval(heartbeat,60000);}
   catch(error){console.error(error);toast("MAILCORE konnte nicht geladen werden: "+(error.message||"Unbekannter Fehler"));showLogin();authMessage("Backend-Fehler: "+(error.message||"Bitte später erneut versuchen."),true);}
   finally{state.booting=false;}
 }
@@ -246,6 +256,45 @@ async function openContacts(){
  }catch(e){$("contactsList").textContent="Fehler: "+e.message;}
 }
 
+
+async function openAdmin(){
+ if(!state.isAdmin){toast("Kein Administratorzugriff.");return;}
+ $("adminModal").classList.remove("hidden");await refreshAdminUsers();
+}
+async function refreshAdminUsers(){
+ $("adminUsers").textContent="Konten werden geladen …";
+ try{
+  const data=await mailcoreApi("admin_users");
+  $("adminUsers").innerHTML=data.users.map(u=>{
+   const p=u.profile||{},banned=!!u.banned_until&&new Date(u.banned_until)>new Date();
+   return '<div class="admin-user"><div><strong>'+esc(p.display_name||p.username||u.email||"Konto")+'</strong><small>'+esc(u.email)+' · '+esc(p.username?"@"+p.username:"kein Profil")+' · '+u.credits+' Credits</small><small>Erstellt: '+new Date(u.created_at).toLocaleDateString("de-DE")+'</small></div><button class="'+(banned?"secondary-btn":"danger-btn")+'" data-admin-ban="'+esc(u.id)+'" data-banned="'+(banned?"true":"false")+'">'+(banned?"Entsperren":"Sperren")+'</button></div>';
+  }).join("")||"Keine Konten gefunden.";
+  $("adminUsers").querySelectorAll("[data-admin-ban]").forEach(btn=>btn.addEventListener("click",async()=>{
+   const ban=btn.dataset.banned!=="true";if(!confirm(ban?"Dieses Konto wirklich sperren?":"Dieses Konto wieder freigeben?"))return;
+   btn.disabled=true;try{await mailcoreApi("admin_ban",{user_id:btn.dataset.adminBan,banned:ban});await refreshAdminUsers();}catch(e){toast(e.message);btn.disabled=false;}
+  }));
+ }catch(e){$("adminUsers").textContent="Fehler: "+e.message;}
+}
+async function sendAdminBroadcast(){
+ const message=$("adminBroadcastText").value.trim();if(!message)return;
+ $("adminBroadcastSend").disabled=true;
+ try{await mailcoreApi("admin_broadcast",{message});$("adminBroadcastText").value="";toast("Systemnachricht an alle Konten veröffentlicht.");}
+ catch(e){toast("Senden fehlgeschlagen: "+e.message);}
+ finally{$("adminBroadcastSend").disabled=false;}
+}
+async function toggleAdminLockdown(){
+ const enabling=$("adminLockdownBtn").dataset.active!=="true";
+ const phrase=enabling?"WARTUNG AKTIVIEREN":"WARTUNG BEENDEN";
+ if(prompt("Sicherheitsbestätigung eingeben: "+phrase)!==phrase)return;
+ const message=enabling?($("adminLockdownMessage").value.trim()||"MAILCORE ist vorübergehend im Wartungsmodus."):"";
+ try{
+  await mailcoreApi("admin_set_lockdown",{lockdown:enabling,message});
+  $("adminLockdownBtn").dataset.active=String(enabling);
+  $("adminLockdownBtn").textContent=enabling?"Wartungsmodus beenden":"Not-Aus aktivieren";
+  toast(enabling?"Not-Aus aktiviert.":"Wartungsmodus beendet.");
+ }catch(e){toast(e.message);}
+}
+
 async function init(){
   if(!window.supabase?.createClient){authMessage("Die Verbindungskomponente konnte nicht geladen werden. Bitte Seite neu laden.",true);return;}
   state.db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
@@ -293,6 +342,12 @@ async function init(){
   $("lockChatBtn").addEventListener("click",toggleChatLock);
   $("blockUserBtn").addEventListener("click",toggleBlockUser);
   $("contactsBtn").addEventListener("click",openContacts);
+  $("adminBtn").addEventListener("click",openAdmin);
+  $("adminClose").addEventListener("click",()=>$("adminModal").classList.add("hidden"));
+  $("adminRefresh").addEventListener("click",refreshAdminUsers);
+  $("adminBroadcastSend").addEventListener("click",sendAdminBroadcast);
+  $("adminLockdownBtn").addEventListener("click",toggleAdminLockdown);
+  $("adminModal").addEventListener("click",e=>{if(e.target===$("adminModal"))$("adminModal").classList.add("hidden");});
   $("closeInvite").addEventListener("click",()=>$("inviteModal").classList.add("hidden"));
   $("inviteModal").addEventListener("click",e=>{if(e.target===$("inviteModal"))$("inviteModal").classList.add("hidden");});
   $("copyInvite").addEventListener("click",async()=>{try{await navigator.clipboard.writeText($("inviteLink").value);$("inviteMessage").textContent="Einladungslink kopiert.";}catch{$("inviteLink").select();$("inviteMessage").textContent="Link markieren und kopieren.";}});
