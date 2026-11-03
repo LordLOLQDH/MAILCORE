@@ -9,7 +9,7 @@ const initials = name => (String(name || "?").trim().charAt(0) || "?").toUpperCa
 function toast(message){ $("toast").textContent=message; $("toast").classList.add("show"); clearTimeout(state.toastTimer); state.toastTimer=setTimeout(()=>$("toast").classList.remove("show"),3200); }
 function authMessage(message,error=false){ $("authMessage").textContent=message; $("authMessage").classList.toggle("error",error); }
 function setAuthMode(mode){ const signup=mode==="signup"; $("authForm").dataset.mode=mode; $("authTitle").innerHTML=signup?'Konto erstellen<span>.</span>':'Willkommen zurück<span>.</span>'; $("authCopy").textContent=signup?'Erstelle deinen Zugang und starte deine ersten Unterhaltungen.':'Melde dich an und setze deine Unterhaltungen fort.'; $("displayNameWrap").classList.toggle("hidden",!signup); $("displayName").required=signup; $("authPassword").autocomplete=signup?"new-password":"current-password"; $("authSubmit").innerHTML=signup?'Konto erstellen <span>→</span>':'Anmelden <span>→</span>'; $("authModeBtn").textContent=signup?'Du hast bereits ein Konto? Anmelden':'Noch kein Konto? Konto erstellen'; authMessage(""); }
-function showLogin(){ $("chatView").classList.add("hidden"); $("authView").classList.remove("hidden"); state.user=null; state.profile=null; state.activeChatId=null; state.activePartner=null; state.chats=[]; if(state.channel){state.db.removeChannel(state.channel);state.channel=null;} clearInterval(state.heartbeatTimer); }
+function closeSidebar(){ $("sidebar").classList.remove("open"); $("sidebarBackdrop").classList.remove("visible"); $("mobileMenu").setAttribute("aria-expanded","false"); }\nfunction openSidebar(){ $("sidebar").classList.add("open"); $("sidebarBackdrop").classList.add("visible"); $("mobileMenu").setAttribute("aria-expanded","true"); }\nfunction showLogin(){ closeSidebar(); $("chatView").classList.add("hidden"); $("authView").classList.remove("hidden"); state.user=null; state.profile=null; state.activeChatId=null; state.activePartner=null; state.chats=[]; if(state.channel){state.db.removeChannel(state.channel);state.channel=null;} clearInterval(state.heartbeatTimer); }
 function showWelcome(){ $("welcomePanel").classList.remove("hidden"); $("conversation").classList.add("hidden"); $("conversationPerson").innerHTML='<div class="avatar placeholder-avatar">M</div><div><strong>Dein Chatbereich</strong><small>Wähle eine Unterhaltung</small></div>'; }
 async function ensureProfile(){
   let {data,error}=await state.db.from("mailcore_profiles").select("*").eq("id",state.user.id).maybeSingle();
@@ -53,7 +53,7 @@ async function loadMessages(){const {data,error}=await state.db.from("mailcore_m
 async function markRead(id){const {error}=await state.db.from("mailcore_messages").update({read_at:new Date().toISOString()}).eq("conversation_id",id).neq("sender_id",state.user.id).is("read_at",null);if(error)console.warn("Lesestatus:",error.message);const c=state.chats.find(x=>x.id===id);if(c)c.unread=0;renderChats();}
 async function openChat(id,partner){
   state.activeChatId=id;state.activePartner=partner||state.chats.find(c=>c.id===id)?.partner||{display_name:"MAILCORE Nutzer",username:"nutzer"};
-  renderChats();$("sidebar").classList.remove("open");$("welcomePanel").classList.add("hidden");$("conversation").classList.remove("hidden");
+  renderChats();closeSidebar();$("welcomePanel").classList.add("hidden");$("conversation").classList.remove("hidden");
   $("conversationPerson").innerHTML='<div class="avatar">'+esc(initials(state.activePartner.display_name))+'</div><div><strong>'+esc(state.activePartner.display_name)+'</strong><small>@'+esc(state.activePartner.username||"nutzer")+'</small></div>';
   if(state.channel){await state.db.removeChannel(state.channel);state.channel=null;}
   await loadMessages(); await markRead(id);
@@ -84,7 +84,7 @@ async function startDirectChat(row){
 async function init(){
   if(!window.supabase?.createClient){authMessage("Die Verbindungskomponente konnte nicht geladen werden. Bitte Seite neu laden.",true);return;}
   state.db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
-  $("authModeBtn").addEventListener("click",()=>setAuthMode($("authForm").dataset.mode==="signup"?"login":"signup"));
+  $("authModeBtn").addEventListener("click",()=>setAuthMode($("authForm").dataset.mode==="signup"?"login":"signup"));\n  $("googleSignIn").addEventListener("click",async()=>{const button=$("googleSignIn");button.disabled=true;button.classList.add("loading");try{const {error}=await state.db.auth.signInWithOAuth({provider:"google",options:{redirectTo:location.origin+location.pathname,queryParams:{prompt:"select_account"}}});if(error)throw error;}catch(error){authMessage("Google-Anmeldung fehlgeschlagen: "+error.message,true);button.disabled=false;button.classList.remove("loading");}});
   $("authForm").addEventListener("submit",async e=>{
     e.preventDefault();const signup=$("authForm").dataset.mode==="signup",button=$("authSubmit"),email=$("authEmail").value.trim(),password=$("authPassword").value;
     button.disabled=true;button.textContent="Einen Moment …";authMessage("");
@@ -103,7 +103,7 @@ async function init(){
   $("userModal").addEventListener("click",e=>{if(e.target===$("userModal"))$("userModal").classList.add("hidden");});
   $("userSearch").addEventListener("input",()=>{clearTimeout(state.searchTimer);state.searchTimer=setTimeout(()=>searchUsers().catch(err=>toast(err.message)),300);});
   $("userResults").addEventListener("click",e=>{const row=e.target.closest("[data-user]");if(row)startDirectChat(row);});
-  $("mobileMenu").addEventListener("click",()=>$("sidebar").classList.toggle("open"));
+  $("mobileMenu").addEventListener("click",()=> $("sidebar").classList.contains("open")?closeSidebar():openSidebar());\n  $("sidebarClose").addEventListener("click",closeSidebar);\n  $("sidebarBackdrop").addEventListener("click",closeSidebar);\n  document.addEventListener("keydown",e=>{if(e.key==="Escape"){closeSidebar();$("userModal").classList.add("hidden");}});
   $("refreshBtn").addEventListener("click",async()=>{const button=$("refreshBtn");button.disabled=true;try{await loadChats();if(state.activeChatId)await loadMessages();toast("Chats aktualisiert");}catch(error){toast("Aktualisierung fehlgeschlagen: "+error.message);}finally{button.disabled=false;}});
   $("logoutBtn").addEventListener("click",async()=>{try{await state.db.auth.signOut();showLogin();setAuthMode("login");}catch(error){toast(error.message);}});
   state.db.auth.onAuthStateChange((event,session)=>{if(event==="SIGNED_IN"&&session)enterApp(session);if(event==="SIGNED_OUT")showLogin();});
