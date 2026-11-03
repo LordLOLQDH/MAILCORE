@@ -119,12 +119,12 @@ async function init(){
   if(!window.supabase?.createClient){authMessage("Die Verbindungskomponente konnte nicht geladen werden. Bitte Seite neu laden.",true);return;}
   state.db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
   $("authModeBtn").addEventListener("click",()=>setAuthMode($("authForm").dataset.mode==="signup"?"login":"signup"));
-  $("googleSignIn").addEventListener("click",async()=>{const button=$("googleSignIn");button.disabled=true;button.classList.add("loading");try{const {error}=await state.db.auth.signInWithOAuth({provider:"google",options:{redirectTo:MAILCORE_URL,queryParams:{prompt:"select_account"}}});if(error)throw error;}catch(error){authMessage("Google-Anmeldung fehlgeschlagen: "+error.message,true);button.disabled=false;button.classList.remove("loading");}});
+  $("googleSignIn").addEventListener("click",async()=>{const button=$("googleSignIn");button.disabled=true;button.classList.add("loading");try{const {error}=await state.db.auth.signInWithOAuth({provider:"google",options:{redirectTo:MAILCORE_URL+location.search,queryParams:{prompt:"select_account"}}});if(error)throw error;}catch(error){authMessage("Google-Anmeldung fehlgeschlagen: "+error.message,true);button.disabled=false;button.classList.remove("loading");}});
   $("authForm").addEventListener("submit",async e=>{
     e.preventDefault();const signup=$("authForm").dataset.mode==="signup",button=$("authSubmit"),email=$("authEmail").value.trim(),password=$("authPassword").value;
     button.disabled=true;button.textContent="Einen Moment …";authMessage("");
     try{
-      if(signup){const display_name=$("displayName").value.trim()||email.split("@")[0];const {data,error}=await state.db.auth.signUp({email,password,options:{data:{display_name},emailRedirectTo:MAILCORE_URL}});if(error)throw error;if(data.session)await enterApp(data.session);else authMessage("Konto erstellt. Bitte bestätige deine E-Mail-Adresse über den Link in deinem Postfach.");}
+      if(signup){const display_name=$("displayName").value.trim()||email.split("@")[0];const {data,error}=await state.db.auth.signUp({email,password,options:{data:{display_name},emailRedirectTo:MAILCORE_URL+location.search}});if(error)throw error;if(data.session)await enterApp(data.session);else authMessage("Konto erstellt. Bitte bestätige deine E-Mail-Adresse über den Link in deinem Postfach.");}
       else{const {data,error}=await state.db.auth.signInWithPassword({email,password});if(error)throw error;if(data.session)await enterApp(data.session);}
     }catch(error){authMessage(error.message||"Anmeldung fehlgeschlagen.",true);}
     finally{button.disabled=false;button.innerHTML=signup?'Konto erstellen <span>→</span>':'Anmelden <span>→</span>';}
