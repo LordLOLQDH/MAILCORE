@@ -1,4 +1,4 @@
-# MAILCORE 0.2.0 — Live Chat
+# MAILCORE 0.3.0 — Live Chat
 
 MAILCORE ist jetzt ein browserbasierter Live-Messenger. Das Frontend wird über GitHub Pages ausgeliefert, Authentifizierung, Profile, Chats und Nachrichten liegen im bestehenden Supabase-Projekt **KDS-AI-v1**.
 
@@ -6,7 +6,7 @@ MAILCORE ist jetzt ein browserbasierter Live-Messenger. Das Frontend wird über 
 
 https://lordlolqdh.github.io/mailcore/
 
-## Funktionen
+## Version 0.3.0\n\n- Einheitliches helles Weiß-Blau-Design mit versionierten Assets gegen Browser-Cache-Probleme\n- Stabilerer App-Start und Schutz vor doppelter Anmeldung/Initialisierung\n- Sichtbare Fehlermeldungen bei Backend-, Chat- und Nachrichtenproblemen\n- Überarbeitete Chat- und Nutzersuche sowie mobile Navigation\n\n## Funktionen
 
 - Registrierung und Anmeldung mit E-Mail und Passwort
 - Nutzerprofile mit automatisch erzeugtem MAILCORE-Benutzernamen
