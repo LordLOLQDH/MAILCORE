@@ -352,3 +352,5 @@ body{background:#eef2f5;color:var(--ink);font-family:"DM Sans",system-ui,sans-se
 @media(max-width:900px){.chat-app{margin:0;height:100dvh;min-height:0;border-radius:0;border:0}.sidebar{width:min(88vw,370px);flex-basis:min(88vw,370px)}.topbar{padding:10px 14px}.top-actions .feature-btn:not(.ai-feature-btn),.top-actions .secure-label{display:none}.messages{padding:20px 14px}.composer{margin:8px 12px calc(10px + env(safe-area-inset-bottom));}.credit-admin-row{grid-template-columns:1fr 1fr}.credit-admin-row button{grid-column:1/-1}}
 @media(min-width:901px){.sidebar{display:flex}.conversation-panel{min-width:0}.topbar{position:relative;z-index:2}}
 @media(orientation:landscape) and (max-height:560px){.chat-app{height:100dvh;margin:0;border-radius:0}.topbar{min-height:58px}.composer{margin-bottom:8px}}
+
+.admin-side-btn{display:block;width:calc(100% - 24px);margin:10px 12px 0;text-align:center;padding:11px;border-color:rgba(254,90,0,.25);background:#fff8f3;color:#b94700;font-weight:700}.admin-side-btn.hidden{display:none}
