@@ -183,3 +183,9 @@ html[data-theme="dark"] .topbar,html[data-theme="dark"] .profile-card,html[data-
 html[data-theme="dark"] .chat-item:hover,html[data-theme="dark"] .chat-item.active{background:#26344b}
 html[data-theme="dark"] .auth-field input,html[data-theme="dark"] .composer textarea{background:#1e2634;color:#edf2fa;border-color:#303b4d}
 @media(max-width:900px){.chat-action{display:none}.top-actions #contactsBtn{display:none}}
+
+/* Keep messenger controls reachable on small screens */
+.top-actions{max-width:68%;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;white-space:nowrap}
+.top-actions::-webkit-scrollbar{display:none}
+@media(max-width:900px){.chat-action{display:inline-flex}.top-actions #contactsBtn,.top-actions #hiddenChatsBtn{display:inline-flex}.top-actions{max-width:64vw;gap:5px}.feature-btn{flex-shrink:0}}
+@media(max-width:520px){.top-actions{max-width:58vw}.chat-action{font-size:9px;padding:0 7px}.top-actions .feature-btn{height:32px}}
