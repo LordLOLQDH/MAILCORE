@@ -16,3 +16,16 @@
 .sidebar-close{display:none;width:32px;height:32px;border:1px solid #e4ebf4;border-radius:9px;background:#fff;color:#7187a2;font-size:22px;line-height:1}
 .sidebar-backdrop{display:none}
 @media(max-width:760px){.sidebar-close{display:grid;place-items:center;margin-left:auto}.sidebar-backdrop.visible{display:block;position:fixed;inset:0;z-index:4;background:#17345255;backdrop-filter:blur(2px)}.sidebar{z-index:5}.sidebar-head{gap:8px}.sidebar-backdrop{cursor:pointer}}
+
+/* MAILCORE 0.5.0 account deletion */
+.profile-card{gap:7px}
+.danger-icon{background:#fff0f0;color:#d64045;font-weight:800}
+.delete-modal>p{line-height:1.7;color:#657b95}
+.delete-modal .auth-field{margin:16px 0}
+.delete-modal .auth-field input{text-transform:uppercase}
+.delete-actions{display:flex;justify-content:flex-end;gap:9px;flex-wrap:wrap;margin-top:12px}
+.secondary-btn,.danger-btn{min-height:42px;padding:10px 14px;border-radius:9px;font-size:11px;font-weight:700}
+.secondary-btn{border:1px solid #dfe8f3;background:#fff;color:#506985}
+.danger-btn{border:0;background:#d94349;color:#fff}
+.danger-btn:disabled{opacity:.45;cursor:not-allowed}
+.danger-btn:not(:disabled):hover{background:#bd3038}
