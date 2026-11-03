@@ -35,6 +35,7 @@ async function mailcoreApi(action,payload={}){
  if(data?.error)throw new Error(data.error);return data;
 }
 function updateCredits(value){state.credits=Number(value)||0;["creditPill","aiCreditPill"].forEach(id=>{if($(id))$(id).textContent=state.credits+" Credits";});}
+async function loadWallet(){try{return await mailcoreApi("wallet");}catch(apiError){const {data,error}=await state.db.from("mailcore_wallets").select("credits").eq("user_id",state.user.id).maybeSingle();if(error||!data)throw apiError;return {credits:Number(data.credits)||0};}}
 function aiBubble(role,content){const el=document.createElement("div");el.className="ai-message "+(role==="user"?"user":"assistant");el.textContent=content;return el;}
 async function loadAIHistory(){const data=await mailcoreApi("ai_history");$("aiMessages").innerHTML="";if(!data.messages?.length){const welcome=document.createElement("div");welcome.className="ai-welcome";welcome.textContent="Hi! Ich bin MAILCORE AI. Frag mich etwas oder lass dir beim Schreiben helfen.";$("aiMessages").append(welcome);}else data.messages.forEach(m=>$("aiMessages").append(aiBubble(m.role,m.content)));$("aiMessages").scrollTop=$("aiMessages").scrollHeight;}
 async function openAI(){$("aiModal").classList.remove("hidden");try{const w=await mailcoreApi("wallet");updateCredits(w.credits);await loadAIHistory();}catch(e){toast("KI konnte nicht geladen werden: "+e.message);}$("aiInput").focus();}
