@@ -2,7 +2,7 @@
 "use strict";
 const SUPABASE_URL = "https://eopvkwhcgznvubesaszv.supabase.co";
 const SUPABASE_KEY = "sb_publishable_d3hVgDqwTuB63BtfumPwoQ_ngy2ig_c";
-const MAILCORE_URL = "https://lordlolqdh.github.io/mailcore/";
+const MAILCORE_URL = "https://lordlolqdh.github.io/MAILCORE/";
 const $ = id => document.getElementById(id);
 const state = { db:null, user:null, profile:null, chats:[], activeChatId:null, activePartner:null, channel:null, searchTimer:null, heartbeatTimer:null, toastTimer:null, booting:false, credits:0, inviteClaimed:false, systemMessages:[], chatControl:null, blockedUsers:[], isAdmin:false };
 const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -316,12 +316,26 @@ async function init(){
   if(!window.supabase?.createClient){authMessage("Die Verbindungskomponente konnte nicht geladen werden. Bitte Seite neu laden.",true);return;}
   state.db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
   $("authModeBtn").addEventListener("click",()=>setAuthMode($("authForm").dataset.mode==="signup"?"login":"signup"));
-  $("googleSignIn").addEventListener("click",async()=>{const button=$("googleSignIn");button.disabled=true;button.classList.add("loading");try{const {error}=await state.db.auth.signInWithOAuth({provider:"google",options:{redirectTo:MAILCORE_URL+location.search,queryParams:{prompt:"select_account"}}});if(error)throw error;}catch(error){authMessage("Google-Anmeldung fehlgeschlagen: "+error.message,true);button.disabled=false;button.classList.remove("loading");}});
+  $("forgotPasswordBtn").addEventListener("click",async()=>{
+    const email=$("authEmail").value.trim();
+    if(!email){authMessage("Bitte zuerst deine E-Mail-Adresse eingeben.");$("authEmail").focus();return;}
+    const button=$("forgotPasswordBtn");button.disabled=true;authMessage("");
+    try{const {error}=await state.db.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname});if(error)throw error;authMessage("Wenn für diese Adresse ein Konto besteht, wurde eine E-Mail zum Festlegen eines Passworts versendet.");}
+    catch(error){authMessage("Passwort-E-Mail konnte nicht versendet werden: "+error.message,true);}
+    finally{button.disabled=false;}
+  });
+  $("passwordRecoveryForm").addEventListener("submit",async e=>{
+    e.preventDefault();const password=$("recoveryPassword").value,button=$("recoverySave");button.disabled=true;$("recoveryMessage").textContent="Passwort wird gespeichert …";
+    try{const {error}=await state.db.auth.updateUser({password});if(error)throw error;$("recoveryMessage").textContent="Passwort erfolgreich festgelegt. Du bist jetzt angemeldet.";$("passwordRecoveryModal").classList.add("hidden");$("recoveryPassword").value="";}
+    catch(error){$("recoveryMessage").textContent=error.message||"Passwort konnte nicht gespeichert werden.";$("recoveryMessage").classList.add("error");}
+    finally{button.disabled=false;}
+  });
+  $("googleSignIn").addEventListener("click",async()=>{const button=$("googleSignIn");button.disabled=true;button.classList.add("loading");try{const {error}=await state.db.auth.signInWithOAuth({provider:"google",options:{redirectTo:location.origin+location.pathname+location.search,queryParams:{prompt:"select_account"}}});if(error)throw error;}catch(error){authMessage("Google-Anmeldung fehlgeschlagen: "+error.message,true);button.disabled=false;button.classList.remove("loading");}});
   $("authForm").addEventListener("submit",async e=>{
     e.preventDefault();const signup=$("authForm").dataset.mode==="signup",button=$("authSubmit"),email=$("authEmail").value.trim(),password=$("authPassword").value;
     button.disabled=true;button.textContent="Einen Moment …";authMessage("");
     try{
-      if(signup){const display_name=$("displayName").value.trim()||email.split("@")[0];const {data,error}=await state.db.auth.signUp({email,password,options:{data:{app:"mailcore",display_name},emailRedirectTo:MAILCORE_URL+location.search}});if(error)throw error;if(data.session)await enterApp(data.session);else authMessage("Konto erstellt. Bitte bestätige deine E-Mail-Adresse über den Link in deinem Postfach.");}
+      if(signup){const display_name=$("displayName").value.trim()||email.split("@")[0];const {data,error}=await state.db.auth.signUp({email,password,options:{data:{app:"mailcore",display_name},emailRedirectTo:location.origin+location.pathname+location.search}});if(error)throw error;if(data.session)await enterApp(data.session);else authMessage("Konto erstellt. Bitte bestätige deine E-Mail-Adresse über den Link in deinem Postfach.");}
       else{const {data,error}=await state.db.auth.signInWithPassword({email,password});if(error)throw error;if(data.session)await enterApp(data.session);}
     }catch(error){authMessage(error.message||"Anmeldung fehlgeschlagen.",true);}
     finally{button.disabled=false;button.innerHTML=signup?'Konto erstellen <span>→</span>':'Anmelden <span>→</span>';}
@@ -381,7 +395,7 @@ async function init(){
   $("deleteAccountConfirm").addEventListener("input",()=>{$("confirmDeleteAccount").disabled=$("deleteAccountConfirm").value.trim().toUpperCase().normalize("NFC")!=="LÖSCHEN";});
   $("confirmDeleteAccount").addEventListener("click",deleteOwnAccount);
   $("logoutBtn").addEventListener("click",async()=>{try{await state.db.auth.signOut({scope:"local"});showLogin();setAuthMode("login");authMessage("Du wurdest abgemeldet.");}catch(error){toast(error.message);}});
-  state.db.auth.onAuthStateChange((event,session)=>{if(event==="SIGNED_IN"&&session)enterApp(session);if(event==="SIGNED_OUT")showLogin();});
+  state.db.auth.onAuthStateChange((event,session)=>{if(event==="PASSWORD_RECOVERY"){$("passwordRecoveryModal").classList.remove("hidden");return;}if(event==="SIGNED_IN"&&session)enterApp(session);if(event==="SIGNED_OUT")showLogin();});
   const {data,error}=await state.db.auth.getSession();if(error)throw error;if(data.session)await enterApp(data.session);
 }
 document.addEventListener("DOMContentLoaded",()=>init().catch(error=>{console.error("MAILCORE init:",error);authMessage("MAILCORE-Start fehlgeschlagen: "+(error.message||"Bitte Seite neu laden."),true);}));
