@@ -30,6 +30,7 @@
     </form>
     <div class="auth-message" id="authMessage" role="status" aria-live="polite"></div>
     <button class="text-btn" id="authModeBtn" type="button">Noch kein Konto? Konto erstellen</button>
+    <button class="text-btn" id="forgotPasswordBtn" type="button">Passwort festlegen / vergessen?</button>
     <div class="auth-foot">Sicherer Login über Supabase · MAILCORE 1.3.0</div>
   </section>
 </div>
@@ -108,6 +109,7 @@
   </section>
 </div>
 <div class="modal-backdrop hidden" id="adminModal"><section class="user-modal admin-modal" role="dialog" aria-modal="true"><header><div><span class="modal-icon">⌘</span><strong>MAILCORE Admin Center</strong></div><button class="small-icon" id="adminClose" type="button">×</button></header><div class="settings-section-title">Systemnachricht an alle</div><textarea id="adminBroadcastText" maxlength="2000" rows="3" placeholder="Nachricht an alle MAILCORE-Konten …"></textarea><button class="primary-btn" id="adminBroadcastSend" type="button">An alle veröffentlichen</button><div class="settings-section-title">Credits verwalten</div><div class="credit-admin-tools"><select id="creditTarget"><option value="">MAILCORE-Nutzer auswählen …</option></select><div class="credit-admin-row"><input id="creditAmount" type="number" min="1" max="100000" step="1" value="50" aria-label="Credit-Betrag"><input id="creditReason" type="text" maxlength="240" value="Admin-Gutschrift" aria-label="Grund"><button class="primary-btn" id="creditGrantBtn" type="button">Credits gutschreiben</button></div><div class="feature-note" id="creditAdminStatus">Gutschriften werden im Admin-Protokoll gespeichert.</div></div><div class="settings-section-title">Systemkontrolle</div><p>Der rote Not-Aus löscht keine Daten. Er aktiviert einen globalen Wartungsmodus. Das ist absichtlich kein versehentlicher digitaler Flammenwerfer.</p><input id="adminLockdownMessage" maxlength="300" placeholder="Wartungshinweis für Nutzer"><button class="danger-btn" id="adminLockdownBtn" data-active="false" type="button">Not-Aus aktivieren</button><div class="settings-section-title">Alle Konten</div><button class="secondary-btn" id="adminRefresh" type="button">Konten aktualisieren</button><div id="adminUsers" class="admin-users">Konten werden geladen …</div></section></div>
+  <div class="modal-backdrop hidden" id="passwordRecoveryModal"><section class="user-modal" role="dialog" aria-modal="true" aria-labelledby="passwordRecoveryTitle"><header><div><span class="modal-icon">⌑</span><strong id="passwordRecoveryTitle">Neues Passwort festlegen</strong></div></header><p>Lege ein neues Passwort für dein MAILCORE-Konto fest.</p><form id="passwordRecoveryForm" class="settings-form"><label class="auth-field"><span>Neues Passwort</span><input id="recoveryPassword" type="password" minlength="8" autocomplete="new-password" required placeholder="Mindestens 8 Zeichen"></label><button class="primary-btn" type="submit" id="recoverySave">Passwort speichern</button><div class="auth-message" id="recoveryMessage" role="status"></div></form></section></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 </body>
 </html>
