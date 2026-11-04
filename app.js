@@ -176,7 +176,7 @@ async function saveSettings(e){
   if(newEmail&&newEmail!==state.user.email){const {error:emailError}=await state.db.auth.updateUser({email:newEmail});if(emailError)throw emailError;$("settingsMessage").textContent="Profil gespeichert. Bitte bestätige die neue E-Mail-Adresse über deinen Posteingang.";}
   const newPassword=$("settingsPassword").value;
   if(newPassword){if(newPassword.length<8)throw new Error("Das neue Passwort muss mindestens 8 Zeichen haben.");const {error:pwError}=await state.db.auth.updateUser({password:newPassword});if(pwError)throw pwError;}
-  const {error:prefError}=await state.db.from("mailcore_user_settings").upsert({user_id:state.user.id,theme:$("themeSelect").value,accent_color:$("accentColor").value,updated_at:new Date().toISOString()},{onConflict:"user_id"});
+  const {error:prefError}=await state.db.from("mailcore_user_settings").upsert({user_id:state.user.id,theme:$("themeSelect").value,accent_color:"#16a34a",updated_at:new Date().toISOString()},{onConflict:"user_id"});
   if(prefError)throw prefError;
   $("profileName").textContent=data.display_name;$("profileHandle").textContent="@"+data.username;$("profileAvatar").textContent=initials(data.display_name);
   $("settingsMessage").textContent=$("settingsMessage").textContent||"Änderungen gespeichert.";toast("Profil aktualisiert.");
@@ -279,7 +279,7 @@ async function refreshAdminUsers(){
   const data=await mailcoreApi("admin_users");
   $("adminUsers").innerHTML=data.users.map(u=>{
    const p=u.profile||{},banned=!!u.banned_until&&new Date(u.banned_until)>new Date();
-   return '<div class="admin-user"><div><strong>'+esc(p.display_name||p.username||u.email||"Konto")+'</strong><small>'+esc(u.email)+' · '+esc(p.username?"@"+p.username:"kein Profil")+' · '+u.credits+' Credits</small><small>Erstellt: '+new Date(u.created_at).toLocaleDateString("de-DE")+'</small></div><button class="'+(banned?"secondary-btn":"danger-btn")+'" data-admin-ban="'+esc(u.id)+'" data-banned="'+(banned?"true":"false")+'">'+(banned?"Entsperren":"Sperren")+'</button></div>';
+   return '<div class="admin-user"><div><strong>'+esc(p.display_name||p.username||u.email||("Konto "+String(u.id).slice(0,8)))+'</strong><small>'+esc(u.email||"Keine E-Mail hinterlegt")+' · '+esc(p.username?"@"+p.username:"Noch kein Profil")+' · '+u.credits+' Credits</small><small>Erstellt: '+new Date(u.created_at).toLocaleDateString("de-DE")+(u.last_sign_in_at?" · Zuletzt aktiv: "+new Date(u.last_sign_in_at).toLocaleDateString("de-DE"):"")+'</small></div><button class="'+(banned?"secondary-btn":"danger-btn")+'" data-admin-ban="'+esc(u.id)+'" data-banned="'+(banned?"true":"false")+'">'+(banned?"Entsperren":"Sperren")+'</button></div>';
   }).join("")||"Keine MAILCORE-Konten gefunden.";
   $("creditTarget").innerHTML='<option value="">MAILCORE-Nutzer auswählen …</option>'+data.users.map(u=>'<option value="'+esc(u.id)+'">'+esc((u.profile?.display_name||u.email)+" · "+u.credits+" Credits")+"</option>").join("");
   $("adminUsers").querySelectorAll("[data-admin-ban]").forEach(btn=>btn.addEventListener("click",async()=>{
