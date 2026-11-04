@@ -146,15 +146,19 @@ async function deleteOwnAccount(){
 }
 
 async function loadAppearance(){
- const {data,error}=await state.db.from("mailcore_user_settings").select("*").eq("user_id",state.user.id).maybeSingle();
+ const {data,error}=await state.db.from("mailcore_user_settings").select("theme").eq("user_id",state.user.id).maybeSingle();
  if(error)throw error;
- const settings=data||{theme:"light",accent_color:"#4778e8"};
- $("themeSelect").value=settings.theme||"light";$("accentColor").value=settings.accent_color||"#4778e8";applyAppearance();
+ const settings=data||{theme:"light"};
+ $("themeSelect").value=settings.theme||"light";
+ $("accentColor").value="#16a34a";
+ applyAppearance();
 }
 function applyAppearance(){
- const theme=$("themeSelect").value;const accent=$("accentColor").value;
+ const theme=$("themeSelect").value;
  document.documentElement.dataset.theme=theme==="system"?(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):theme;
- document.documentElement.style.setProperty("--accent",accent);
+ document.documentElement.style.setProperty("--accent","#16a34a");
+ document.documentElement.style.setProperty("--accent-soft","rgba(22,163,74,.10)");
+ $("accentColor").value="#16a34a";
 }
 function openSettings(){
  $("settingsDisplayName").value=state.profile?.display_name||"";
@@ -281,7 +285,7 @@ async function refreshAdminUsers(){
    const p=u.profile||{},banned=!!u.banned_until&&new Date(u.banned_until)>new Date();
    return '<div class="admin-user"><div><strong>'+esc(p.display_name||p.username||u.email||("Konto "+String(u.id).slice(0,8)))+'</strong><small>'+esc(u.email||"Keine E-Mail hinterlegt")+' · '+esc(p.username?"@"+p.username:"Noch kein Profil")+' · '+u.credits+' Credits</small><small>Erstellt: '+new Date(u.created_at).toLocaleDateString("de-DE")+(u.last_sign_in_at?" · Zuletzt aktiv: "+new Date(u.last_sign_in_at).toLocaleDateString("de-DE"):"")+'</small></div><button class="'+(banned?"secondary-btn":"danger-btn")+'" data-admin-ban="'+esc(u.id)+'" data-banned="'+(banned?"true":"false")+'">'+(banned?"Entsperren":"Sperren")+'</button></div>';
   }).join("")||"Keine MAILCORE-Konten gefunden.";
-  $("creditTarget").innerHTML='<option value="">MAILCORE-Nutzer auswählen …</option>'+data.users.map(u=>'<option value="'+esc(u.id)+'">'+esc((u.profile?.display_name||u.email)+" · "+u.credits+" Credits")+"</option>").join("");
+  $("creditTarget").innerHTML='<option value="">MAILCORE-Nutzer auswählen …</option>'+data.users.map(u=>'<option value="'+esc(u.id)+'">'+esc((u.profile?.display_name||u.email||("Konto "+String(u.id).slice(0,8)))+" · "+u.credits+" Credits")+"</option>").join("");
   $("adminUsers").querySelectorAll("[data-admin-ban]").forEach(btn=>btn.addEventListener("click",async()=>{
    const ban=btn.dataset.banned!=="true";if(!confirm(ban?"Dieses Konto wirklich sperren?":"Dieses Konto wieder freigeben?"))return;
    btn.disabled=true;try{await mailcoreApi("admin_ban",{user_id:btn.dataset.adminBan,banned:ban});await refreshAdminUsers();}catch(e){toast(e.message);btn.disabled=false;}
